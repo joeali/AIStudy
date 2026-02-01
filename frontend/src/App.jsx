@@ -370,7 +370,12 @@ export default function AIStudyCompanion() {
 
   // 保存当前对话到历史记录
   const saveToHistory = () => {
-    if (conversation.length === 0) return;
+    // 检查对话是否为空或没有实际内容
+    const hasRealContent = conversation.some(msg =>
+      msg.content && msg.content.trim().length > 0 && !msg.showAnalyzing
+    );
+
+    if (conversation.length === 0 || !hasRealContent) return;
 
     // 过滤掉图片数据，只保存文本内容
     const conversationWithoutImages = conversation.map(msg => ({
@@ -773,9 +778,6 @@ export default function AIStudyCompanion() {
           }
         }
       }
-
-      // 保存到历史记录
-      setTimeout(() => saveToHistory(), 100);
 
     } catch (error) {
       console.error('❌ 请求失败:', error);
@@ -2169,8 +2171,12 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                 {tab.id === 'solve' && activeTab === 'solve' && (
                   <button
                     onClick={() => {
-                      // 保存当前对话到历史记录
-                      if (conversation.length > 0) {
+                      // 保存当前对话到历史记录 - 只在有实际内容时保存
+                      const hasRealContent = conversation.some(msg =>
+                        msg.content && msg.content.trim().length > 0 && !msg.showAnalyzing
+                      );
+
+                      if (conversation.length > 0 && hasRealContent) {
                         if (currentSessionType === 'full_analysis') {
                           // 整体分析 - 保存到对话历史
                           const conversationWithoutImages = conversation.map(msg => ({
@@ -2199,7 +2205,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                           // 错题分析 - 不需要在这里保存，因为已经在performAnalysis中保存了
                         } else {
                           // 普通对话 - 保存到对话历史
-                          saveConversationToHistory();
+                          saveToHistory();
                         }
                       }
 
@@ -2291,8 +2297,12 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
 
               <button
                 onClick={() => {
-                  // 保存当前对话到历史记录
-                  if (conversation.length > 0) {
+                  // 保存当前对话到历史记录 - 只在有实际内容时保存
+                  const hasRealContent = conversation.some(msg =>
+                    msg.content && msg.content.trim().length > 0 && !msg.showAnalyzing
+                  );
+
+                  if (conversation.length > 0 && hasRealContent) {
                     if (currentSessionType === 'full_analysis') {
                       // 整体分析 - 保存到对话历史
                       const conversationWithoutImages = conversation.map(msg => ({
