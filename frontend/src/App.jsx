@@ -1941,7 +1941,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                       : '输入你的问题...（上传图片后可说"不会"或"错了"启动诊断）'
                   }
                   className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent"
-                  rows="3"
+                  rows="1"
                   disabled={isThinking}
                 />
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
