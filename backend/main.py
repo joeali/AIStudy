@@ -2012,14 +2012,18 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
 2. 红笔批改 - 被老师标记为错误的题目
 3. 学生答案明显错误
 
-请用简洁的格式回答：
-"第X题、第Y题、第Z题"
+**重要：请严格按照以下格式回答，不要包含其他内容**
 
-例如：
-"第4题、第5题" 或 "第17题、第19题"
+格式要求：
+- 如果有错题：只回答"第X题、第Y题、第Z题"（用顿号分隔）
+- 如果没有错题：只回答"没有错题"
 
-如果没有任何错误，请回答：
-"没有错题"
+示例：
+✓ 正确：第4题、第5题
+✓ 正确：第17题
+✓ 正确：没有错题
+✗ 错误：第4题有错误（不要描述）
+✗ 错误：17（要有"第"和"题"）
 
 开始识别："""
 
@@ -2080,17 +2084,6 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
                         r'是[：:]\s*(\d+)',  # 是：17
                         r'题号[：:]\s*(\d+)',  # 题号：17
                     ]
-
-                    all_numbers = []
-                    for pattern in question_patterns:
-                        matches = re.findall(pattern, response_text, re.IGNORECASE)
-                        all_numbers.extend(matches)
-
-                    # 另外提取所有连续的数字（作为备用）
-                    all_digit_matches = re.findall(r'\d+', response_text)
-                    # 只取长度合理的数字（1-3位数）
-                    all_digit_matches = [m for m in all_digit_matches if 1 <= len(m) <= 3 and int(m) < 1000]
-                    all_numbers.extend(all_digit_matches)
 
                     all_numbers = []
                     for pattern in question_patterns:
