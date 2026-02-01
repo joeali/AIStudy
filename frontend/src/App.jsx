@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, Brain, AlertCircle, Target, TrendingUp, Award, ChevronRight, Plus, X, BarChart3, Sparkles, Check, Clock, RefreshCw, Image, Upload, FileText } from 'lucide-react';
+import { BookOpen, Brain, AlertCircle, Target, TrendingUp, Award, Plus, X, BarChart3, Sparkles, Check, Clock, RefreshCw, Image, Upload, FileText } from 'lucide-react';
 
 // API 配置
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -1568,11 +1568,6 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-lg font-semibold" style={{ color: '#374151' }}>Solvely AI</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-              <ChevronRight className="w-5 h-5 text-gray-600" />
-            </button>
           </div>
         </div>
       </header>
