@@ -1079,69 +1079,6 @@ export default function AIStudyCompanion() {
         }
       }
 
-      // 保存到历史记录
-      if (finalData) {
-        // 保存对话内容到对话历史（整体分析和错题分析都保存）
-        const conversationWithoutImages = conversation.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
-
-        const modeText = mode === 'full' ? '整体分析' : '错题分析';
-        const historyItem = {
-          id: messageId,
-          timestamp: new Date().toISOString(),
-          preview: modeText + '：' + (streamedContent.substring(0, 50) + '...' || '试卷分析'),
-          conversation: conversationWithoutImages,
-          question: modeText,
-          hasImage: true,
-          sessionType: mode === 'full' ? 'full_analysis' : 'mistake_analysis'
-        };
-
-        setConversationHistory(prev => {
-          const newHistory = [historyItem, ...prev].slice(0, 10);
-          try {
-            localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
-          } catch (error) {
-            console.warn('无法保存对话历史到localStorage:', error);
-            try {
-              localStorage.removeItem('conversationHistory');
-              localStorage.setItem('conversationHistory', JSON.stringify(newHistory.slice(0, 5)));
-            } catch (e) {
-              console.error('localStorage完全无法使用:', e);
-            }
-          }
-          return newHistory;
-        });
-
-        // 错题分析也保存到错题分析历史
-        if (mode !== 'full') {
-          const historyEntry = {
-            id: messageId,
-            type: 'analysis',
-            mode: mode,
-            result: finalData,
-            timestamp: new Date().toISOString()
-          };
-
-          setAnalysisHistory(prev => {
-            const updated = [historyEntry, ...prev].slice(0, 10);
-            try {
-              localStorage.setItem('analysisHistory', JSON.stringify(updated));
-            } catch (error) {
-              console.warn('无法保存到localStorage（可能是配额已满）:', error);
-              try {
-                localStorage.removeItem('analysisHistory');
-                localStorage.setItem('analysisHistory', JSON.stringify(updated.slice(0, 5)));
-              } catch (e) {
-                console.error('localStorage完全无法使用:', e);
-              }
-            }
-            return updated;
-          });
-        }
-      }
-
     } catch (error) {
       console.error('Analysis error:', error);
       setConversation(prev => prev.map(msg =>
