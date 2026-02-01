@@ -1848,12 +1848,13 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
               </div>
             )}
 
-            {/* 主要内容区域 */}
-            <div className="space-y-6">
-              {/* 上传/预览区域 */}
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 transition-colors bg-gray-50">
-                {!uploadedImage && conversation.length === 0 ? (
-                  <div>
+            {/* 主要内容区域 - 使用 flex 布局固定输入框 */}
+            <div className="flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
+              {/* 对话区域 - 可滚动 */}
+              <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+                {/* 上传/预览区域 */}
+                {!uploadedImage && conversation.length === 0 && (
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 transition-colors bg-gray-50">
                     <Upload className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                     <p className="text-lg font-medium text-gray-700 mb-2">上传你的学习资料</p>
                     <p className="text-sm text-gray-500 mb-4">支持图片、PDF等格式</p>
@@ -1870,53 +1871,49 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                       />
                     </label>
                   </div>
-                ) : null}
-
-              {/* 对话区域 - 始终在有对话内容时显示 */}
-              {conversation.length > 0 && (
-                  <div className="space-y-4">
-                    {conversation.map((msg, idx) => (
-                      <div key={msg.id || idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        {msg.role === 'assistant' && (
-                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mr-2">
-                            <Sparkles className="w-5 h-5 text-white" />
-                          </div>
-                        )}
-                        <div className={`max-w-xl px-4 py-3 rounded-lg text-left ${
-                          msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
-                        }`}>
-                          {msg.image && (
-                            <img
-                              src={msg.image.preview}
-                              alt="上传的图片"
-                              className="max-w-sm w-full rounded-lg mb-2"
-                            />
-                          )}
-                          {/* 调试信息 */}
-                          {console.log('[渲染] 消息渲染:', {
-                            id: msg.id,
-                            showAnalyzing: msg.showAnalyzing,
-                            hasContent: !!msg.content,
-                            contentLength: msg.content?.length || 0
-                          })}
-                          {/* 内容显示逻辑 */}
-                          {msg.showAnalyzing && (!msg.content || msg.content.length === 0) ? (
-                            <div className="flex items-center gap-3 text-blue-600" data-test="loading-spinner">
-                              <RefreshCw className="w-5 h-5 animate-spin" />
-                              <span className="text-base font-medium">AI 正在分析中...</span>
-                            </div>
-                          ) : msg.content && msg.content.length > 0 ? (
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 )}
+
+                {/* 对话消息 */}
+                {conversation.map((msg, idx) => (
+                  <div key={msg.id || idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role === 'assistant' && (
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mr-2">
+                        <Sparkles className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+                    <div className={`max-w-xl px-4 py-3 rounded-lg text-left ${
+                      msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+                    }`}>
+                      {msg.image && (
+                        <img
+                          src={msg.image.preview}
+                          alt="上传的图片"
+                          className="max-w-sm w-full rounded-lg mb-2"
+                        />
+                      )}
+                      {/* 调试信息 */}
+                      {console.log('[渲染] 消息渲染:', {
+                        id: msg.id,
+                        showAnalyzing: msg.showAnalyzing,
+                        hasContent: !!msg.content,
+                        contentLength: msg.content?.length || 0
+                      })}
+                      {/* 内容显示逻辑 */}
+                      {msg.showAnalyzing && (!msg.content || msg.content.length === 0) ? (
+                        <div className="flex items-center gap-3 text-blue-600" data-test="loading-spinner">
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          <span className="text-base font-medium">AI 正在分析中...</span>
+                        </div>
+                      ) : msg.content && msg.content.length > 0 ? (
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* 输入区域 */}
-              <div className={`border rounded-lg p-4 shadow-sm ${isGuidanceMode ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
+              {/* 输入区域 - 固定在底部 */}
+              <div className={`border rounded-lg p-4 shadow-sm flex-shrink-0 ${isGuidanceMode ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
                 {/* 引导模式提示 */}
                 {isGuidanceMode && (
                   <div className="mb-3 p-2 bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-2">
