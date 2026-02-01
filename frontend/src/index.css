@@ -1,0 +1,385 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========== Solvely 全局样式 ========== */
+
+:root {
+  --solvely-blue: #3b82f6;
+  --solvely-blue-dark: #2563eb;
+  --solvely-gray-bg: #f8f9fa;
+  --solvely-gray-light: #e5e7eb;
+  --solvely-text-primary: #374151;
+  --solvely-text-secondary: #6b7280;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--solvely-gray-bg);
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ========== Solvely 自定义滚动条 ========== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F7FA;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CCCCCC;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #AAAAAA;
+}
+
+/* ========== Solvely 按钮样式 ========== */
+
+.btn-solvely-primary {
+  background-color: #4285F4;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-solvely-primary:hover {
+  background-color: #3367D6;
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+.btn-solvely-primary:disabled {
+  background-color: #CCCCCC;
+  cursor: not-allowed;
+}
+
+.btn-solvely-secondary {
+  background-color: #FFFFFF;
+  color: #4285F4;
+  border: 2px solid #4285F4;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-solvely-secondary:hover {
+  background-color: #4285F4;
+  color: #FFFFFF;
+}
+
+/* ========== Solvely 卡片样式 ========== */
+
+.card-solvely {
+  background-color: #FFFFFF;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card-solvely-lg {
+  background-color: #FFFFFF;
+  border: 1px solid #E0E0E0;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ========== Solvely 统计卡片 ========== */
+
+.stats-card-solvely {
+  background: linear-gradient(135deg, #4285F4, #5BA3F5);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2);
+}
+
+/* ========== Solvely 输入框样式 ========== */
+
+.input-solvely {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  background-color: #FFFFFF;
+}
+
+.input-solvely:focus {
+  outline: none;
+  border-color: #4285F4;
+  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
+}
+
+/* ========== Solvely 表格样式 ========== */
+
+.table-solvely {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table-solvely thead {
+  background-color: #F5F7FA;
+}
+
+.table-solvely th {
+  padding: 12px;
+  text-align: left;
+  font-weight: bold;
+  color: #333333;
+  border-bottom: 2px solid #E0E0E0;
+}
+
+.table-solvely td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #F0F0F0;
+  color: #333333;
+}
+
+.table-solvely tbody tr:nth-child(even) {
+  background-color: #F5F7FA;
+}
+
+.table-solvely tbody tr:hover {
+  background-color: #EDF2FF;
+}
+
+/* ========== Solvely 标签样式 ========== */
+
+.tag-solvely {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tag-solvely-primary {
+  background-color: #E3F2FD;
+  color: #4285F4;
+}
+
+.tag-solvely-success {
+  background-color: #E8F5E9;
+  color: #28A745;
+}
+
+.tag-solvely-error {
+  background-color: #FFEBEE;
+  color: #DC3545;
+}
+
+.tag-solvely-warning {
+  background-color: #FFF8E1;
+  color: #F57C00;
+}
+
+/* ========== Solvely 徽章样式 ========== */
+
+.badge-solvely {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background-color: #FFF8E1;
+}
+
+/* ========== Solvely 进度提示 ========== */
+
+.progress-solvely {
+  text-align: center;
+  padding: 15px;
+  background-color: #F5F7FA;
+  border-radius: 8px;
+  color: #4285F4;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ========== Solvely 错误提示 ========== */
+
+.error-solvely {
+  background-color: #FFEBEE;
+  color: #DC3545;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin: 15px 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* ========== Solvely 上传区域 ========== */
+
+.upload-solvely {
+  width: 80%;
+  height: 200px;
+  margin: 0 auto 30px;
+  background-color: #F5F7FA;
+  border: 2px dashed #E0E0E0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-solvely:hover {
+  border-color: #4285F4;
+  background-color: #F0F4FF;
+}
+
+/* ========== Solvely 动画 ========== */
+
+@keyframes solvely-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-solvely-pulse {
+  animation: solvely-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ========== Solvely 颜色工具类 ========== */
+
+.text-solvely-primary {
+  color: #4285F4;
+}
+
+.text-solvely-dark {
+  color: #333333;
+}
+
+.text-solvely-light {
+  color: #666666;
+}
+
+.bg-solvely-primary {
+  background-color: #4285F4;
+}
+
+.bg-solvely-secondary {
+  background-color: #F5F7FA;
+}
+
+.border-solvely {
+  border-color: #E0E0E0;
+}
+
+/* ========== Solvely 左侧边栏 ========== */
+
+.sidebar-solvely {
+  position: fixed;
+  left: 0;
+  top: 4rem;
+  height: calc(100vh - 4rem);
+  width: 16rem;
+  background-color: #FFFFFF;
+  border-right: 1px solid #E0E0E0;
+  overflow-y: auto;
+  z-index: 40;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-item-solvely {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.sidebar-item-solvely:hover {
+  background-color: #F5F7FA;
+}
+
+.sidebar-item-solvely.active {
+  background-color: #E3F2FD;
+  border-left: 3px solid #4285F4;
+}
+
+.sidebar-icon-solvely {
+  padding: 0.5rem;
+  border-radius: 8px;
+  background-color: #F5F7FA;
+  color: #666666;
+  transition: all 0.3s ease;
+}
+
+.sidebar-item-solvely.active .sidebar-icon-solvely {
+  background-color: #4285F4;
+  color: #FFFFFF;
+}
+
+/* ========== Solvably 响应式 ========== */
+
+@media (max-width: 768px) {
+  .upload-solvely {
+    width: 95%;
+    height: 150px;
+  }
+
+  .btn-solvely-primary {
+    width: 90%;
+    height: 50px;
+    font-size: 18px;
+  }
+
+  .stats-card-solvely {
+    padding: 15px;
+  }
+
+  .table-solvely {
+    font-size: 13px;
+  }
+
+  .table-solvely th,
+  .table-solvely td {
+    padding: 8px;
+  }
+
+  /* 移动端隐藏左侧边栏，需要时改为抽屉式 */
+  aside {
+    transform: translateX(-100%);
+  }
+
+  aside.open {
+    transform: translateX(0);
+  }
+
+  main {
+    margin-left: 0 !important;
+  }
+}

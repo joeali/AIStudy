@@ -1,0 +1,62 @@
+INFO:     Started server process [56661]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+============================================================
+AI Study Companion - 后端服务
+============================================================
+
+启动服务器...
+
+API 文档: http://localhost:8000/docs
+健康检查: http://localhost:8000/health
+
+============================================================
+INFO:     127.0.0.1:64677 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64707 - "OPTIONS /api/detect/mistakes/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64707 - "POST /api/detect/mistakes/stream HTTP/1.1" 200 OK
+[错题检测流式] ========== 开始处理 ==========
+[错题检测流式] 收到请求, user_marks数量: 0
+[错题检测流式] 开始解码图片...
+[错题检测流式] 图片解码成功, 尺寸: 1279x1706
+[错题检测流式] 调用GLM-4V API...
+[错题检测流式] messages结构: user, 内容类型: <class 'list'>
+[错题检测流式] content长度: 2
+[API #1] 等待获取GLM API锁...
+[API #1] 已获取锁,开始调用
+[API #1] 发送请求到GLM... (尝试 1/3)
+[API #1] ✅ 请求成功
+[API #1] 响应结构: ['choices', 'created', 'id', 'model', 'request_id', 'usage']
+[API #1] choices[0] keys: ['finish_reason', 'index', 'message']
+[API #1] message keys: ['content', 'role']
+[API #1] 内容类型: <class 'str'>
+[API #1] 内容长度: 11
+[API #1] 内容repr: '第4题、第5题、第6题'
+[API #1] 内容预览: 第4题、第5题、第6题
+[错题检测流式] API调用完成
+[错题检测流式] API响应类型: <class 'str'>
+[错题检测流式] API响应repr: '第4题、第5题、第6题'
+[错题检测流式] API完整响应:
+第4题、第5题、第6题
+
+[错题检测流式] 响应长度: 11 字符
+[错题检测流式] 从回复中提取到题号: ['4', '5', '6']
+[API #2] 等待获取GLM API锁...
+[API #2] 已获取锁,开始调用
+[API #2] 发送请求到GLM... (尝试 1/3)
+[API #2] ✅ 请求成功
+[API #2] 响应结构: ['choices', 'created', 'id', 'model', 'object', 'request_id', 'usage']
+[API #2] choices[0] keys: ['finish_reason', 'index', 'message']
+[API #2] message keys: ['content', 'role']
+[API #2] 内容类型: <class 'str'>
+[API #2] 内容长度: 899
+[API #2] 内容repr: '**一、学习现状分析**\n\n从卷面来看，学生在本次考试中表现出以下三个方面的优势：\n\n1. **基础知识扎实**：学生在基础知识的掌握上表现出色，能够熟练运用所学知识解答题目，显示出良好的学习基础。\n'
+[API #2] 内容预览: **一、学习现状分析**
+
+从卷面来看，学生在本次考试中表现出以下三个方面的优势：
+
+1. **基础知识扎实**：学生在基础知识的掌握上表现出色，能够熟练运用所学知识解答题目，显示出良好的学习基础。
+
+2. **解题思路清晰**：学生在解题过程中，能够按照题目要求，逐步分析问题，逐步推导出答案，展现出清晰的解题思路。
+
+3. **时间管理能力较强**：学生在考试过程中，能够合理分配时间，确保在规定

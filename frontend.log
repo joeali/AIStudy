@@ -1,0 +1,10 @@
+npm warn Unknown user config "email". This will stop working in the next major version of npm.
+
+> ai-study-companion-frontend@1.0.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 296 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: use --host to expose
