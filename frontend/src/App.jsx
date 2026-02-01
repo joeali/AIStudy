@@ -1572,11 +1572,53 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         </div>
       </header>
 
-      {/* Solvely 风格侧边栏导航 - 响应式 */}
+      {/* Solvely 风格左侧边栏导航 */}
       <div className="flex" style={{ backgroundColor: '#f8f9fa' }}>
+        {/* 左侧边栏 - 桌面端显示 */}
+        <aside className="hidden md:block md:fixed md:left-0 md:top-16 md:h-[calc(100vh-4rem)] md:w-64 md:z-40 md:overflow-y-auto" style={{ backgroundColor: '#f8f9fa' }}>
+          <nav className="p-4 space-y-1">
+            {[
+              { id: 'solve', label: 'AI Solver', icon: BookOpen },
+              { id: 'mistakes', label: '错题本', icon: AlertCircle },
+              { id: 'analysis', label: '学习分析', icon: BarChart3 },
+              { id: 'quiz', label: '练习生成', icon: Target }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                  activeTab === tab.id
+                    ? 'text-blue-600'
+                    : 'text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'}`} />
+                <span className="font-medium text-sm">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* 底部 Apps 区域 */}
+          <div className="absolute bottom-4 left-4 right-4">
+            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-gray-200 transition-all relative">
+              <div className="w-5 h-5 relative">
+                <div className="w-5 h-5 grid grid-cols-2 gap-0.5">
+                  <div className="bg-gray-500 rounded-sm"></div>
+                  <div className="bg-gray-500 rounded-sm"></div>
+                  <div className="bg-gray-500 rounded-sm"></div>
+                  <div className="bg-gray-500 rounded-sm"></div>
+                </div>
+                {/* 通知红点 */}
+                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full"></div>
+              </div>
+              <span className="font-medium text-sm">Apps</span>
+            </button>
+          </div>
+        </aside>
+
         {/* 主内容区域 */}
-        <main className="flex-1 min-h-[calc(100vh-4rem)] bg-white md:ml-64 pb-20 md:pb-0">
-          <div className="max-w-4xl mx-auto px-4 md:px-8 py-4 md:py-8">
+        <main className="ml-0 md:ml-64 flex-1 min-h-[calc(100vh-4rem)] bg-white pb-20 md:pb-0">
+          <div className="max-w-4xl mx-auto px-8 py-8">
         {/* AI解题标签 */}
         {activeTab === 'solve' && (
           <div className="space-y-6">
@@ -2328,50 +2370,32 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         )}
           </div>
         </main>
-
-        {/* 侧边栏：PC端左侧，移动端底部 */}
-        <aside className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg md:border-t-0 md:bg-[#f8f9fa] md:left-0 md:right-auto md:top-16 md:h-[calc(100vh-4rem)] md:w-64 md:border-r md:border-gray-200 md:shadow-none overflow-y-auto">
-          {/* PC端：垂直导航；移动端：水平导航 */}
-          <nav className="flex flex-row md:flex-col justify-around md:justify-start p-0 md:p-4 md:space-y-1 h-16 md:h-auto">
-            {[
-              { id: 'solve', label: 'AI解题', icon: BookOpen },
-              { id: 'mistakes', label: '错题本', icon: AlertCircle },
-              { id: 'analysis', label: '学习分析', icon: BarChart3 },
-              { id: 'quiz', label: '练习', icon: Target }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col md:flex-row items-center justify-center md:justify-start gap-0 md:gap-3 px-2 md:px-3 py-3 md:py-2.5 rounded-none md:rounded-lg transition-all ${
-                  activeTab === tab.id
-                    ? 'text-blue-600 border-t-2 border-blue-600 md:border-t-0 md:bg-blue-50 md:bg-transparent'
-                    : 'text-gray-600 border-t-2 border-transparent hover:text-gray-900 hover:bg-gray-50 md:hover:bg-gray-200'
-                }`}
-              >
-                <tab.icon className={`w-6 h-6 md:w-5 md:h-5 flex-shrink-0 ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'}`} />
-                <span className="font-medium text-[10px] md:text-xs lg:text-sm hidden md:inline leading-tight">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          {/* 底部 Apps 区域 - 仅PC端显示 */}
-          <div className="hidden md:block absolute bottom-4 left-4 right-4">
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-gray-200 transition-all relative">
-              <div className="w-5 h-5 relative">
-                <div className="w-5 h-5 grid grid-cols-2 gap-0.5">
-                  <div className="bg-gray-500 rounded-sm"></div>
-                  <div className="bg-gray-500 rounded-sm"></div>
-                  <div className="bg-gray-500 rounded-sm"></div>
-                  <div className="bg-gray-500 rounded-sm"></div>
-                </div>
-                {/* 通知红点 */}
-                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full"></div>
-              </div>
-              <span className="font-medium text-sm">Apps</span>
-            </button>
-          </div>
-        </aside>
       </div>
+
+      {/* 底部导航栏 - 移动端显示 */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+        <div className="flex justify-around items-center h-16 px-2">
+          {[
+            { id: 'solve', label: '解题', icon: BookOpen },
+            { id: 'mistakes', label: '错题本', icon: AlertCircle },
+            { id: 'analysis', label: '分析', icon: BarChart3 },
+            { id: 'quiz', label: '练习', icon: Target }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all ${
+                activeTab === tab.id
+                  ? 'text-blue-600'
+                  : 'text-gray-500'
+              }`}
+            >
+              <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'}`} />
+              <span className="text-xs font-medium">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {/* 图片弹窗 */}
       {showImageModal && modalImage && (
