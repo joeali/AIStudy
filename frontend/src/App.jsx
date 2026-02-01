@@ -385,6 +385,17 @@ export default function AIStudyCompanion() {
       // image: msg.image
     }));
 
+    // 检查是否重复
+    const conversationStr = JSON.stringify(conversationWithoutImages);
+    const isDuplicate = conversationHistory.some(item =>
+      JSON.stringify(item.conversation) === conversationStr
+    );
+
+    if (isDuplicate) {
+      console.log('对话已存在，跳过保存');
+      return;
+    }
+
     const historyItem = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
@@ -409,6 +420,36 @@ export default function AIStudyCompanion() {
         console.error('localStorage完全无法使用:', e);
       }
     }
+  };
+
+  // 删除单条对话历史
+  const deleteConversationHistory = (itemId) => {
+    const updated = conversationHistory.filter(item => item.id !== itemId);
+    setConversationHistory(updated);
+    try {
+      localStorage.setItem('conversationHistory', JSON.stringify(updated));
+    } catch (error) {
+      console.error('删除历史记录失败:', error);
+    }
+  };
+
+  // 删除单条错题分析历史
+  const deleteAnalysisHistory = (itemId) => {
+    const updated = analysisHistory.filter(item => item.id !== itemId);
+    setAnalysisHistory(updated);
+    try {
+      localStorage.setItem('analysisHistory', JSON.stringify(updated));
+    } catch (error) {
+      console.error('删除分析历史失败:', error);
+    }
+  };
+
+  // 检查对话是否已存在（去重）
+  const isConversationDuplicate = (conversation) => {
+    const conversationStr = JSON.stringify(conversation);
+    return conversationHistory.some(item =>
+      JSON.stringify(item.conversation) === conversationStr
+    );
   };
 
   // 保存错题分析到历史记录
@@ -2121,22 +2162,30 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                             content: msg.content
                           }));
 
-                          const historyItem = {
-                            id: Date.now(),
-                            timestamp: new Date().toISOString(),
-                            preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
-                            conversation: conversationWithoutImages,
-                            question: '整体分析',
-                            hasImage: uploadedImage !== null,
-                            sessionType: 'full_analysis'
-                          };
+                          // 检查是否重复
+                          const conversationStr = JSON.stringify(conversationWithoutImages);
+                          const isDuplicate = conversationHistory.some(item =>
+                            JSON.stringify(item.conversation) === conversationStr
+                          );
 
-                          const newHistory = [historyItem, ...conversationHistory].slice(0, 10);
-                          try {
-                            localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
-                            setConversationHistory(newHistory);
-                          } catch (error) {
-                            console.warn('无法保存对话历史到localStorage:', error);
+                          if (!isDuplicate) {
+                            const historyItem = {
+                              id: Date.now(),
+                              timestamp: new Date().toISOString(),
+                              preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
+                              conversation: conversationWithoutImages,
+                              question: '整体分析',
+                              hasImage: uploadedImage !== null,
+                              sessionType: 'full_analysis'
+                            };
+
+                            const newHistory = [historyItem, ...conversationHistory].slice(0, 10);
+                            try {
+                              localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+                              setConversationHistory(newHistory);
+                            } catch (error) {
+                              console.warn('无法保存对话历史到localStorage:', error);
+                            }
                           }
                         } else if (currentSessionType === 'mistake_analysis') {
                           // 错题分析 - 不需要在这里保存，因为已经在performAnalysis中保存了
@@ -2247,22 +2296,30 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                         content: msg.content
                       }));
 
-                      const historyItem = {
-                        id: Date.now(),
-                        timestamp: new Date().toISOString(),
-                        preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
-                        conversation: conversationWithoutImages,
-                        question: '整体分析',
-                        hasImage: uploadedImage !== null,
-                        sessionType: 'full_analysis'
-                      };
+                      // 检查是否重复
+                      const conversationStr = JSON.stringify(conversationWithoutImages);
+                      const isDuplicate = conversationHistory.some(item =>
+                        JSON.stringify(item.conversation) === conversationStr
+                      );
 
-                      const newHistory = [historyItem, ...conversationHistory].slice(0, 10);
-                      try {
-                        localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
-                        setConversationHistory(newHistory);
-                      } catch (error) {
-                        console.warn('无法保存对话历史到localStorage:', error);
+                      if (!isDuplicate) {
+                        const historyItem = {
+                          id: Date.now(),
+                          timestamp: new Date().toISOString(),
+                          preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
+                          conversation: conversationWithoutImages,
+                          question: '整体分析',
+                          hasImage: uploadedImage !== null,
+                          sessionType: 'full_analysis'
+                        };
+
+                        const newHistory = [historyItem, ...conversationHistory].slice(0, 10);
+                        try {
+                          localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+                          setConversationHistory(newHistory);
+                        } catch (error) {
+                          console.warn('无法保存对话历史到localStorage:', error);
+                        }
                       }
                     } else if (currentSessionType === 'mistake_analysis') {
                       // 错题分析 - 不需要在这里保存，因为已经在performAnalysis中保存了
@@ -2474,45 +2531,71 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {conversationHistory.map((item) => (
+                      {conversationHistory.map((item, index) => (
                         <div
                           key={item.id}
-                          className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
-                          onClick={() => {
-                            // 恢复对话内容
-                            setConversation(item.conversation);
-                            // 恢复会话类型
-                            if (item.sessionType) {
-                              setCurrentSessionType(item.sessionType);
-                            } else {
-                              setCurrentSessionType('conversation');
-                            }
-                            // 恢复问题文本（如果有的话）
-                            if (item.question) {
-                              setQuestion(item.question);
-                            }
-                            // 关闭历史记录对话框
-                            setShowHistory(false);
-                          }}
+                          className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
                         >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              {item.hasImage && <Image className="w-4 h-4 text-blue-600" />}
-                              <span className="text-sm font-medium text-gray-800">
-                                {item.preview}
-                              </span>
+                          <div className="flex items-start gap-3">
+                            {/* 记录号 */}
+                            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm">
+                              {index + 1}
                             </div>
-                            <span className="text-xs text-gray-500">
-                              {new Date(item.timestamp).toLocaleString('zh-CN', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {item.conversation.length} 条消息
+
+                            {/* 内容区域 - 可点击恢复对话 */}
+                            <div
+                              className="flex-1 cursor-pointer"
+                              onClick={() => {
+                                // 恢复对话内容
+                                setConversation(item.conversation);
+                                // 恢复会话类型
+                                if (item.sessionType) {
+                                  setCurrentSessionType(item.sessionType);
+                                } else {
+                                  setCurrentSessionType('conversation');
+                                }
+                                // 恢复问题文本（如果有的话）
+                                if (item.question) {
+                                  setQuestion(item.question);
+                                }
+                                // 关闭历史记录对话框
+                                setShowHistory(false);
+                              }}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  {item.hasImage && <Image className="w-4 h-4 text-blue-600" />}
+                                  <span className="text-sm font-medium text-gray-800">
+                                    {item.preview}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(item.timestamp).toLocaleString('zh-CN', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.conversation.length} 条消息
+                              </div>
+                            </div>
+
+                            {/* 删除按钮 */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('确定要删除这条历史记录吗？')) {
+                                  deleteConversationHistory(item.id);
+                                }
+                              }}
+                              className="flex-shrink-0 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="删除"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -2528,7 +2611,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {analysisHistory.map((item) => {
+                      {analysisHistory.map((item, index) => {
                         // 在对话历史中查找对应的对话记录
                         const conversationItem = conversationHistory.find(ch => ch.id === item.id);
                         return (
@@ -2536,48 +2619,69 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                             key={item.id}
                             className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
                           >
-                            <div
-                              className="cursor-pointer"
-                              onClick={() => {
-                                // 如果有对应的对话记录，恢复对话
-                                if (conversationItem) {
-                                  setConversation(conversationItem.conversation);
-                                  setCurrentSessionType(conversationItem.sessionType || 'conversation');
-                                  if (conversationItem.question) {
-                                    setQuestion(conversationItem.question);
-                                  }
-                                  setShowHistory(false);
-                                } else {
-                                  // 没有对话记录，显示详情
-                                  setSelectedHistoryAnalysis(item);
-                                  setShowHistoryAnalysis(true);
-                                  setShowHistory(false);
-                                }
-                              }}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-800">
-                                  {item.mode === 'full' ? '整体分析' : '错题讲解'}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  {new Date(item.timestamp).toLocaleString('zh-CN', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </span>
+                            <div className="flex items-start gap-3">
+                              {/* 记录号 */}
+                              <div className="flex-shrink-0 w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center font-bold text-sm">
+                                {index + 1}
                               </div>
-                              {item.result && item.result.mistakes && (
-                                <div className="mt-2 text-xs text-gray-500">
-                                  检测到 {item.result.mistakes.length} 道错题
+
+                              {/* 内容区域 - 可点击恢复对话 */}
+                              <div
+                                className="flex-1 cursor-pointer"
+                                onClick={() => {
+                                  // 如果有对应的对话记录，恢复对话
+                                  if (conversationItem) {
+                                    setConversation(conversationItem.conversation);
+                                    setCurrentSessionType(conversationItem.sessionType || 'conversation');
+                                    if (conversationItem.question) {
+                                      setQuestion(conversationItem.question);
+                                    }
+                                    setShowHistory(false);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <span className="text-sm font-medium text-gray-800">
+                                    {item.mode === 'full' ? '整体分析' : '错题讲解'}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(item.timestamp).toLocaleString('zh-CN', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
                                 </div>
-                              )}
-                              {conversationItem && (
-                                <div className="mt-2 text-xs text-blue-600">
-                                  点击恢复对话
-                                </div>
-                              )}
+                                {item.result && item.result.mistakes && (
+                                  <div className="mt-2 text-xs text-gray-500">
+                                    检测到 {item.result.mistakes.length} 道错题
+                                  </div>
+                                )}
+                                {conversationItem && (
+                                  <div className="mt-2 text-xs text-blue-600">
+                                    点击恢复对话
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 删除按钮 */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('确定要删除这条分析记录吗？')) {
+                                    // 如果有对应的对话记录，也删除
+                                    if (conversationItem) {
+                                      deleteConversationHistory(item.id);
+                                    }
+                                    deleteAnalysisHistory(item.id);
+                                  }
+                                }}
+                                className="flex-shrink-0 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="删除"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         );
