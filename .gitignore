@@ -46,3 +46,4 @@ test_*.py
 # Environment variables
 .env
 .env.local
+.vercel

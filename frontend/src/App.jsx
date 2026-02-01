@@ -4,6 +4,10 @@ import { BookOpen, Brain, AlertCircle, Target, TrendingUp, Award, ChevronRight, 
 // API 配置
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// 唯一ID生成器
+let messageIdCounter = 0;
+const generateMessageId = () => `msg_${Date.now()}_${messageIdCounter++}`;
+
 export default function AIStudyCompanion() {
   const [activeTab, setActiveTab] = useState('solve');
   const [question, setQuestion] = useState('');
@@ -38,6 +42,19 @@ export default function AIStudyCompanion() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImage, setModalImage] = useState(null);
 
+  // Toast通知状态
+  const [toast, setToast] = useState(null);
+
+  // File input refs
+  const fileInputRef = useRef(null);
+  const mistakeFileInputRef = useRef(null);
+
+  // 显示Toast通知
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // 从 localStorage 加载历史记录
   useEffect(() => {
     const saved = localStorage.getItem('conversationHistory');
@@ -59,6 +76,23 @@ export default function AIStudyCompanion() {
       }
     }
   }, []);
+
+  // 调试：监听对话状态变化
+  useEffect(() => {
+    if (conversation.length > 0) {
+      const lastMsg = conversation[conversation.length - 1];
+      console.log('[React渲染] 对话状态更新:', {
+        长度: conversation.length,
+        最后一条消息: {
+          id: lastMsg.id,
+          role: lastMsg.role,
+          showAnalyzing: lastMsg.showAnalyzing,
+          content: lastMsg.content,
+          content长度: lastMsg.content?.length || 0
+        }
+      });
+    }
+  }, [conversation]);
 
   // 保存当前对话到历史记录
   const saveToHistory = () => {
@@ -259,62 +293,84 @@ export default function AIStudyCompanion() {
       return;
     }
 
-    // 如果只上传了图片但没有输入文字，自动执行错题检测
-    if (!question.trim() && uploadedImage) {
-      // 保存图片引用
-      const currentImage = uploadedImage;
+    console.log('🚀 发送请求（后端会自动排队）...');
+    setPendingRequests(prev => prev + 1);
 
-      // 先将图片添加到对话
+    // 检查对话中最后一条是否是刚上传的图片消息（有image但content为空）
+    const lastMessage = conversation[conversation.length - 1];
+    const isLastMessageImageOnly = lastMessage &&
+                                   lastMessage.role === 'user' &&
+                                   lastMessage.image &&
+                                   !lastMessage.content.trim();
+
+    let userMessage;
+    let currentImage = uploadedImage;
+
+    if (isLastMessageImageOnly && !question.trim()) {
+      // 如果最后一条是图片消息且没有输入文字，更新这条消息的content
+      const currentMarks = [...markedErrors];
       const content = markedErrors.length > 0
         ? `我已标记了${markedErrors.length}道错题，请为我生成详细的学情分析。`
-        : '请帮我找出这张试卷中的错题';
+        : '请分析这张试卷';
 
-      const imageMessage = {
-        role: 'user',
-        content,
-        image: currentImage
+      userMessage = {
+        ...lastMessage,
+        content: content
       };
+      currentImage = lastMessage.image; // 使用已有的图片
+
+      // 更新对话中的消息
       setConversation(prev => {
-        const newConversation = [...prev, imageMessage];
+        const newConversation = [...prev];
+        newConversation[newConversation.length - 1] = userMessage;
         return newConversation;
       });
 
-      // 清空图片预览和标记
-      setUploadedImage(null);
-      const currentMarks = [...markedErrors];
+      // 清空标记
       setMarkedErrors([]);
+      setUploadedImage(null);
 
       // 执行错题检测
       await detectMistakes(currentImage, currentMarks);
       return;
+    } else {
+      // 否则创建新消息
+      userMessage = {
+        role: 'user',
+        content: question || '请分析这道题目',
+        image: uploadedImage
+      };
+      currentImage = uploadedImage;
+
+      // 清空输入
+      setQuestion('');
+      setUploadedImage(null);
+
+      // 添加用户消息到对话
+      setConversation(prev => [...prev, userMessage]);
     }
 
-    console.log('🚀 发送请求（后端会自动排队）...');
-    setPendingRequests(prev => prev + 1);
-
-    const userMessage = {
-      role: 'user',
-      content: question || '请分析这道题目',
-      image: uploadedImage
-    };
-    const currentImage = uploadedImage;
-
-    // 清空输入
-    setQuestion('');
-    setUploadedImage(null);
-
-    // 添加用户消息到对话
-    setConversation(prev => [...prev, userMessage]);
     setIsThinking(true);
+    console.log('[前端] 创建AI消息，设置showAnalyzing=true');
 
     // 创建一个空的助手消息，用于流式更新
-    const assistantMessageId = Date.now();
+    // 同时标记为正在分析状态
+    const assistantMessageId = generateMessageId();
     const assistantMessage = {
       id: assistantMessageId,
       role: 'assistant',
-      content: ''
+      content: '',
+      showAnalyzing: true  // 控制是否显示加载动画
     };
-    setConversation(prev => [...prev, assistantMessage]);
+
+    // 使用函数式更新确保状态立即生效
+    setConversation(prev => {
+      const newConversation = [...prev, assistantMessage];
+      console.log('[前端] 添加消息到对话，消息ID:', assistantMessageId);
+      console.log('[前端] 新对话长度:', newConversation.length);
+      console.log('[前端] 消息状态:', assistantMessage);
+      return newConversation;
+    });
 
     try {
       // 使用流式API
@@ -351,6 +407,7 @@ export default function AIStudyCompanion() {
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            console.log('[前端 SSE] 收到数据:', line.substring(0, 100));
             try {
               const data = JSON.parse(line.slice(6));
 
@@ -358,19 +415,38 @@ export default function AIStudyCompanion() {
                 // 错误处理
                 setConversation(prev => prev.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, content: `抱歉，${data.error}` }
+                    ? { ...msg, content: `抱歉，${data.error}`, showAnalyzing: false }
                     : msg
                 ));
+                setIsThinking(false);
+                setPendingRequests(prev => Math.max(0, prev - 1));
                 return;
               }
 
+              // 处理状态消息 - 更新UI状态
+              if (data.status) {
+                console.log('[前端 SSE] 收到状态消息:', data.status, data.message);
+                // 状态消息只是确认，不需要改变showAnalyzing（初始已经是true）
+                // 收到状态消息说明后端已开始处理
+                continue;
+              }
+
               if (data.content) {
-                // 逐字更新内容
-                setConversation(prev => prev.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, content: msg.content + data.content }
-                    : msg
-                ));
+                // 逐字更新内容，移除加载状态
+                setConversation(prev => {
+                  const updated = prev.map(msg =>
+                    msg.id === assistantMessageId
+                      ? {
+                          ...msg,
+                          content: msg.content + data.content,
+                          showAnalyzing: false  // 开始有内容后，移除加载状态
+                        }
+                      : msg
+                  );
+                  const targetMsg = updated.find(m => m.id === assistantMessageId);
+                  console.log('[前端 SSE] 收到内容:', data.content, '新长度:', targetMsg?.content?.length || 0);
+                  return updated;
+                });
               }
 
               if (data.done) {
@@ -456,15 +532,50 @@ export default function AIStudyCompanion() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // 检查文件大小(限制10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('图片文件过大,请上传小于10MB的图片', 'error');
+        e.target.value = ''; // 清空input
+        return;
+      }
+
+      // 检查文件类型
+      if (!file.type.startsWith('image/')) {
+        showToast('请上传图片文件', 'error');
+        e.target.value = ''; // 清空input
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const base64Data = event.target.result.split(',')[1];
         const mediaType = file.type;
-        setUploadedImage({
+
+        // 创建图片对象
+        const imageData = {
           data: base64Data,
           type: mediaType,
           preview: event.target.result
-        });
+        };
+
+        // 直接添加到对话中，而不是保存到 uploadedImage
+        const imageMessage = {
+          role: 'user',
+          content: '', // 空内容，不显示文字
+          image: imageData
+        };
+
+        setConversation(prev => [...prev, imageMessage]);
+
+        // 同时保存到 uploadedImage 供后续使用（但不显示在中间）
+        setUploadedImage(imageData);
+
+        // 清空input
+        e.target.value = '';
+      };
+      reader.onerror = () => {
+        showToast('图片读取失败,请重试', 'error');
+        e.target.value = ''; // 清空input
       };
       reader.readAsDataURL(file);
     }
@@ -479,8 +590,18 @@ export default function AIStudyCompanion() {
   // 开始诊断流程
   const startDiagnosis = async (questionText, studentAnswer, image) => {
     setIsThinking(true);
+
+    // 创建消息ID用于流式更新
+    const assistantMessageId = Date.now();
+    const assistantMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '🔍 正在分析错误原因...'
+    };
+    setConversation(prev => [...prev, assistantMessage]);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/diagnose/analyze`, {
+      const response = await fetch(`${API_BASE_URL}/api/diagnose/analyze/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -490,34 +611,105 @@ export default function AIStudyCompanion() {
         })
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-      if (data.success && data.data) {
-        setCurrentDiagnosis(data.data);
+      // 读取流式响应
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamedContent = '';
+      let finalData = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // 处理SSE格式的数据
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              // 错误处理
+              if (data.error) {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: `抱歉，${data.error}` }
+                    : msg
+                ));
+                return;
+              }
+
+              // 状态更新
+              if (data.status === 'analyzing') {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: data.message || '' }
+                    : msg
+                ));
+              }
+
+              // 内容更新
+              if (data.content) {
+                streamedContent += data.content;
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: streamedContent }
+                    : msg
+                ));
+              }
+
+              // 完成并获取最终数据
+              if (data.done && data.data) {
+                finalData = data.data;
+              }
+
+            } catch (e) {
+              console.error('解析SSE数据失败:', e);
+            }
+          }
+        }
+      }
+
+      if (finalData) {
+        setCurrentDiagnosis(finalData);
 
         // 显示诊断结果
-        setConversation(prev => [...prev, {
-          role: 'assistant',
-          content: `📋 **诊断结果**
+        setConversation(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? {
+                ...msg,
+                content: `📋 **诊断结果**
 
-**知识点**: ${data.data.knowledge_point}
-**错误类型**: ${data.data.error_type}
+**知识点**: ${finalData.knowledge_point}
+**错误类型**: ${finalData.error_type}
 
-**问题分析**: ${data.data.problem_description}
+**问题分析**: ${finalData.problem_description}
 
 ---`,
-          isDiagnosis: true
-        }]);
+                isDiagnosis: true
+              }
+            : msg
+        ));
 
         // 自动开始引导
-        setTimeout(() => startGuidance(questionText, data.data), 500);
+        setTimeout(() => startGuidance(questionText, finalData), 500);
       }
+
     } catch (error) {
       console.error('诊断失败:', error);
-      setConversation(prev => [...prev, {
-        role: 'assistant',
-        content: '抱歉，诊断过程出现问题，请稍后重试。'
-      }]);
+      setConversation(prev => prev.map(msg =>
+        msg.id === assistantMessageId
+          ? { ...msg, content: '抱歉，诊断过程出现问题，请稍后重试。' }
+          : msg
+      ));
     } finally {
       setIsThinking(false);
     }
@@ -566,8 +758,17 @@ ${mistakes.map((m, idx) => `${idx + 1}. 第${m.question_no || '?'}题`).join('\n
     setIsThinking(true);
     setIsGuidanceMode(true);
 
+    // 创建消息ID用于流式更新
+    const assistantMessageId = Date.now();
+    const assistantMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '🤔 正在思考如何引导...'
+    };
+    setConversation(prev => [...prev, assistantMessage]);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/diagnose/guide`, {
+      const response = await fetch(`${API_BASE_URL}/api/diagnose/guide/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -578,29 +779,97 @@ ${mistakes.map((m, idx) => `${idx + 1}. 第${m.question_no || '?'}题`).join('\n
         })
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-      if (data.success) {
-        setGuidanceConversation([{
-          role: 'assistant',
-          content: data.response
-        }]);
+      // 读取流式响应
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamedContent = '';
 
-        setConversation(prev => [...prev, {
-          role: 'assistant',
-          content: `👨‍🏫 **开始引导**
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-${data.response}
+        buffer += decoder.decode(value, { stream: true });
+
+        // 处理SSE格式的数据
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              // 错误处理
+              if (data.error) {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: `抱歉，${data.error}` }
+                    : msg
+                ));
+                return;
+              }
+
+              // 状态更新
+              if (data.status === 'thinking') {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: data.message || '' }
+                    : msg
+                ));
+              }
+
+              // 内容更新
+              if (data.content) {
+                streamedContent += data.content;
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: streamedContent }
+                    : msg
+                ));
+              }
+
+            } catch (e) {
+              console.error('解析SSE数据失败:', e);
+            }
+          }
+        }
+      }
+
+      // 更新最终消息
+      setConversation(prev => prev.map(msg =>
+        msg.id === assistantMessageId
+          ? {
+              ...msg,
+              content: `👨‍🏫 **开始引导**
+
+${streamedContent}
 
 ---
 💡 请回答老师的问题，我会一步步引导你找到正确答案。
 （输入"退出引导"返回普通对话模式）`,
-          isGuidance: true
-        }]);
-      }
+              isGuidance: true
+            }
+          : msg
+      ));
+
+      setGuidanceConversation([{
+        role: 'assistant',
+        content: streamedContent
+      }]);
+
     } catch (error) {
       console.error('引导启动失败:', error);
       setIsGuidanceMode(false);
+      setConversation(prev => prev.map(msg =>
+        msg.id === assistantMessageId
+          ? { ...msg, content: '抱歉，引导启动失败。' }
+          : msg
+      ));
     } finally {
       setIsThinking(false);
     }
@@ -669,8 +938,17 @@ ${data.response}
 
     setIsThinking(true);
 
+    // 创建消息ID用于流式更新
+    const assistantMessageId = Date.now();
+    const assistantMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '🤔...'
+    };
+    setConversation(prev => [...prev, assistantMessage]);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/diagnose/guide`, {
+      const response = await fetch(`${API_BASE_URL}/api/diagnose/guide/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -681,24 +959,78 @@ ${data.response}
         })
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        const newGuidanceMsg = { role: 'assistant', content: data.response };
-        setGuidanceConversation(prev => [...prev, { role: 'user', content: userMessage }, newGuidanceMsg]);
-
-        setConversation(prev => [...prev, {
-          role: 'assistant',
-          content: data.response,
-          isGuidance: true
-        }]);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+
+      // 读取流式响应
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // 处理SSE格式的数据
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              // 错误处理
+              if (data.error) {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: `抱歉，${data.error}` }
+                    : msg
+                ));
+                return;
+              }
+
+              // 状态更新
+              if (data.status === 'thinking') {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: data.message || '' }
+                    : msg
+                ));
+              }
+
+              // 内容更新
+              if (data.content) {
+                streamedContent += data.content;
+                setConversation(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: streamedContent, isGuidance: true }
+                    : msg
+                ));
+              }
+
+            } catch (e) {
+              console.error('解析SSE数据失败:', e);
+            }
+          }
+        }
+      }
+
+      // 更新引导对话历史
+      const newGuidanceMsg = { role: 'assistant', content: streamedContent };
+      setGuidanceConversation(prev => [...prev, { role: 'user', content: userMessage }, newGuidanceMsg]);
+
     } catch (error) {
       console.error('引导继续失败:', error);
-      setConversation(prev => [...prev, {
-        role: 'assistant',
-        content: '抱歉，引导过程出现问题。'
-      }]);
+      setConversation(prev => prev.map(msg =>
+        msg.id === assistantMessageId
+          ? { ...msg, content: '抱歉，引导过程出现问题。', isGuidance: true }
+          : msg
+      ));
     } finally {
       setIsThinking(false);
     }
@@ -717,15 +1049,20 @@ ${data.response}
 
     setIsThinking(true);
     setPendingRequests(prev => prev + 1);
+    console.log('[detectMistakes] 创建AI消息，设置showAnalyzing=true');
 
     // 创建助手消息用于流式更新
-    const assistantMessageId = Date.now();
+    const assistantMessageId = generateMessageId();
     const assistantMessage = {
       id: assistantMessageId,
       role: 'assistant',
-      content: ''
+      content: '',
+      showAnalyzing: true  // 初始显示加载动画
     };
-    setConversation(prev => [...prev, assistantMessage]);
+    setConversation(prev => {
+      console.log('[detectMistakes] 添加消息到对话，消息ID:', assistantMessageId);
+      return [...prev, assistantMessage];
+    });
 
     // 存储流式内容和分析结果
     let streamedContent = '';
@@ -779,6 +1116,9 @@ ${data.response}
 
               // 状态更新
               if (data.status) {
+                console.log('[detectMistakes SSE] 收到状态:', data.status, data.message);
+                // 状态消息不改变showAnalyzing，让"AI正在分析中"保持显示
+                // 只有收到实际内容(data.content)时才移除showAnalyzing
                 if (data.status === 'start') {
                   setConversation(prev => prev.map(msg =>
                     msg.id === assistantMessageId
@@ -810,12 +1150,13 @@ ${data.response}
                 }
               }
 
-              // 内容更新（学情分析）
+              // 内容更新（学情分析）- 只有收到实际内容时才移除showAnalyzing
               if (data.content) {
+                console.log('[detectMistakes SSE] 收到内容:', data.content);
                 streamedContent += data.content;
                 setConversation(prev => prev.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, content: streamedContent }
+                    ? { ...msg, content: streamedContent, showAnalyzing: false }
                     : msg
                 ));
               }
@@ -899,6 +1240,19 @@ ${mistakeList}
     const file = e.target.files[0];
     if (!file) return;
 
+    // 验证文件
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('图片文件过大,请上传小于10MB的图片', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      showToast('请上传图片文件', 'error');
+      e.target.value = '';
+      return;
+    }
+
     setPendingRequests(prev => prev + 1);
     setIsThinking(true);
 
@@ -948,14 +1302,15 @@ ${mistakeList}
           };
 
           setMistakes(prev => [newMistake, ...prev]);
-          alert('✅ 错题已成功识别并添加到错题本！');
+          showToast('✅ 错题已成功识别并添加到错题本！', 'success');
+          e.target.value = ''; // 清空input以便重复上传
         } else {
           const errorMsg = data.error || '识别失败，请重试';
-          alert(`❌ ${errorMsg}`);
+          showToast(`❌ ${errorMsg}`, 'error');
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('识别失败，请重试');
+        showToast('识别失败，请重试', 'error');
       } finally {
         setPendingRequests(prev => {
           const newValue = Math.max(0, prev - 1);
@@ -966,6 +1321,14 @@ ${mistakeList}
         });
       }
     };
+
+    reader.onerror = () => {
+      showToast('图片读取失败，请重试', 'error');
+      setPendingRequests(prev => Math.max(0, prev - 1));
+      setIsThinking(false);
+      e.target.value = '';
+    };
+
     reader.readAsDataURL(file);
   };
 
@@ -1019,13 +1382,18 @@ ${mistakeList}
       const data = await response.json();
 
       if (data.success) {
-        alert(`✅ 已为"${topic}"生成针对性练习题！\n\n${data.response.substring(0, 200)}...\n\n请在下方查看完整内容。`);
+        showToast(`✅ 已为"${topic}"生成针对性练习题！`, 'success');
+        // 在对话区域显示结果
+        setConversation(prev => [...prev, {
+          role: 'assistant',
+          content: data.response
+        }]);
       } else {
-        alert(`生成失败：${data.error || '请稍后再试'}`);
+        showToast(`生成失败：${data.error || '请稍后再试'}`, 'error');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('生成失败，请稍后再试');
+      showToast('生成失败，请稍后再试', 'error');
     } finally {
       setPendingRequests(prev => {
         const newValue = Math.max(0, prev - 1);
@@ -1087,13 +1455,19 @@ D. ...
       const data = await response.json();
 
       if (data.success) {
-        alert(`✅ 已生成${subjectName}练习题！\n\n${data.response}`);
+        showToast(`✅ 已生成${subjectName}练习题！`, 'success');
+        // 显示在对话区域
+        setActiveTab('solve');
+        setConversation([{
+          role: 'assistant',
+          content: data.response
+        }]);
       } else {
-        alert(`生成失败：${data.error || '请稍后再试'}`);
+        showToast(`生成失败：${data.error || '请稍后再试'}`, 'error');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('生成失败，请稍后再试');
+      showToast('生成失败，请稍后再试', 'error');
     } finally {
       setPendingRequests(prev => {
         const newValue = Math.max(0, prev - 1);
@@ -1107,7 +1481,10 @@ D. ...
 
   // 生成学习报告
   const generateLearningReport = async () => {
-    if (!learningData) return;
+    if (!learningData) {
+      showToast('暂无学习数据，请先进行错题分析', 'error');
+      return;
+    }
 
     setPendingRequests(prev => prev + 1);
     setIsThinking(true);
@@ -1140,13 +1517,19 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
       const data = await response.json();
 
       if (data.success) {
-        alert('📊 完整学习报告\n\n' + data.response);
+        showToast('📊 学习报告生成成功！', 'success');
+        // 显示在对话区域
+        setActiveTab('solve');
+        setConversation([{
+          role: 'assistant',
+          content: '📊 **完整学习报告**\n\n' + data.response
+        }]);
       } else {
-        alert(`生成失败：${data.error || '请稍后再试'}`);
+        showToast(`生成失败：${data.error || '请稍后再试'}`, 'error');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('生成失败，请稍后再试');
+      showToast('生成失败，请稍后再试', 'error');
     } finally {
       setPendingRequests(prev => {
         const newValue = Math.max(0, prev - 1);
@@ -1161,6 +1544,22 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
   // ==================== Solvely UI 渲染 ====================
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F7FA' }}>
+      {/* Toast 通知 */}
+      {toast && (
+        <div className={`fixed top-20 right-4 z-[100] px-6 py-3 rounded-lg shadow-lg transition-all transform ${
+          toast.type === 'success' ? 'bg-green-600' :
+          toast.type === 'error' ? 'bg-red-600' :
+          'bg-blue-600'
+        } text-white max-w-md`}>
+          <div className="flex items-center gap-3">
+            {toast.type === 'success' && <Check className="w-5 h-5" />}
+            {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
+            {toast.type === 'info' && <Sparkles className="w-5 h-5" />}
+            <span className="text-sm font-medium">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Solvely 风格头部 */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex justify-between items-center h-16 px-6">
@@ -1464,6 +1863,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                       <Plus className="w-5 h-5" />
                       <span className="font-medium">选择文件</span>
                       <input
+                        ref={fileInputRef}
                         type="file"
                         accept="image/*"
                         onChange={handleImageUpload}
@@ -1472,28 +1872,13 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                       />
                     </label>
                   </div>
-                ) : uploadedImage && conversation.length === 0 ? (
-                  <div className="flex justify-center">
-                    <img
-                      src={uploadedImage.preview}
-                      alt="上传的学习资料"
-                      className="max-w-md w-full h-auto rounded-lg shadow-md border-2 border-blue-200 hover:border-blue-400 transition-colors"
-                      style={{ cursor: 'pointer' }}
-                      onDoubleClick={() => {
-                        setModalImage(uploadedImage);
-                        setShowImageModal(true);
-                        setMarkedErrors([]);
-                      }}
-                      title="双击放大查看"
-                    />
-                  </div>
                 ) : null}
 
               {/* 对话区域 - 始终在有对话内容时显示 */}
               {conversation.length > 0 && (
                   <div className="space-y-4">
                     {conversation.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg.id || idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.role === 'assistant' && (
                           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mr-2">
                             <Sparkles className="w-5 h-5 text-white" />
@@ -1509,7 +1894,22 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                               className="max-w-sm w-full rounded-lg mb-2"
                             />
                           )}
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          {/* 调试信息 */}
+                          {console.log('[渲染] 消息渲染:', {
+                            id: msg.id,
+                            showAnalyzing: msg.showAnalyzing,
+                            hasContent: !!msg.content,
+                            contentLength: msg.content?.length || 0
+                          })}
+                          {/* 内容显示逻辑 */}
+                          {msg.showAnalyzing && (!msg.content || msg.content.length === 0) ? (
+                            <div className="flex items-center gap-3 text-blue-600" data-test="loading-spinner">
+                              <RefreshCw className="w-5 h-5 animate-spin" />
+                              <span className="text-base font-medium">AI 正在分析中...</span>
+                            </div>
+                          ) : msg.content && msg.content.length > 0 ? (
+                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                          ) : null}
                         </div>
                       </div>
                     ))}
@@ -1519,14 +1919,6 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
 
               {/* 输入区域 */}
               <div className={`border rounded-lg p-4 shadow-sm ${isGuidanceMode ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
-                {/* 分析状态提示 */}
-                {isThinking && (
-                  <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
-                    <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
-                    <span className="text-blue-700 font-medium">正在分析中，请稍候...</span>
-                  </div>
-                )}
-
                 {/* 引导模式提示 */}
                 {isGuidanceMode && (
                   <div className="mb-3 p-2 bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-2">
@@ -1583,7 +1975,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                     {isThinking ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>正在分析中，请稍候...</span>
+                        <span>发送中...</span>
                       </>
                     ) : (
                       <>
