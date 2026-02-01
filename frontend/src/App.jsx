@@ -1924,22 +1924,8 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                   </div>
                 )}
 
-                {/* 输入行：上传按钮 + 输入框 + 发送按钮 */}
+                {/* 输入行：输入框 + 按钮组 */}
                 <div className="flex items-center gap-2">
-                  {/* 上传图片按钮 */}
-                  <label className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors cursor-pointer ${
-                    isThinking || isGuidanceMode ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                  }`}>
-                    <Plus className="w-5 h-5" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      disabled={isThinking || isGuidanceMode}
-                    />
-                  </label>
-
                   {/* 输入框 */}
                   <div className="flex-1 relative">
                     <textarea
@@ -1958,34 +1944,51 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                           ? '输入问题，或直接点击"分析"按钮'
                           : '输入你的问题...（上传图片后可说"不会"或"错了"启动诊断）'
                       }
-                      className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent py-2"
+                      className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent py-2 pr-2"
                       rows="1"
                       disabled={isThinking}
                     />
                   </div>
 
-                  {/* 发送按钮 */}
-                  <button
-                    onClick={handleSolveQuestion}
-                    disabled={(!question.trim() && !uploadedImage) || isThinking}
-                    className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
-                      isThinking
-                        ? 'bg-gray-300 cursor-not-allowed'
-                        : isGuidanceMode
-                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                        : uploadedImage && !question.trim()
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
-                        : (!question.trim() && !uploadedImage)
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {isThinking ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <ArrowUp className="w-5 h-5" />
-                    )}
-                  </button>
+                  {/* 按钮组 */}
+                  <div className="flex items-center gap-1">
+                    {/* 上传图片按钮 */}
+                    <label className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors cursor-pointer ${
+                      isThinking || isGuidanceMode ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    }`}>
+                      <Plus className="w-5 h-5" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        disabled={isThinking || isGuidanceMode}
+                      />
+                    </label>
+
+                    {/* 发送按钮 */}
+                    <button
+                      onClick={handleSolveQuestion}
+                      disabled={(!question.trim() && !uploadedImage) || isThinking}
+                      className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
+                        isThinking
+                          ? 'bg-gray-300 cursor-not-allowed'
+                          : isGuidanceMode
+                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                          : uploadedImage && !question.trim()
+                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
+                          : (!question.trim() && !uploadedImage)
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {isThinking ? (
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <ArrowUp className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
