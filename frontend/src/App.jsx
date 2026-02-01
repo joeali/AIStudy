@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, Brain, AlertCircle, Target, TrendingUp, Award, Plus, X, BarChart3, Sparkles, Check, Clock, RefreshCw, Image, Upload, FileText } from 'lucide-react';
+import { BookOpen, Brain, AlertCircle, Target, TrendingUp, Award, Plus, X, BarChart3, Sparkles, Check, Clock, RefreshCw, Image, Upload, FileText, ArrowUp } from 'lucide-react';
 
 // API 配置
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -1913,7 +1913,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
               </div>
 
               {/* 输入区域 - 固定在底部 */}
-              <div className={`border rounded-lg p-4 shadow-sm flex-shrink-0 ${isGuidanceMode ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
+              <div className={`border rounded-lg p-3 shadow-sm flex-shrink-0 ${isGuidanceMode ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'}`}>
                 {/* 引导模式提示 */}
                 {isGuidanceMode && (
                   <div className="mb-3 p-2 bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-2">
@@ -1924,30 +1924,13 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                   </div>
                 )}
 
-                <textarea
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSolveQuestion();
-                    }
-                  }}
-                  placeholder={
-                    isGuidanceMode
-                      ? "请回答老师的问题..."
-                      : uploadedImage
-                      ? '输入问题，或直接点击"分析"按钮'
-                      : '输入你的问题...（上传图片后可说"不会"或"错了"启动诊断）'
-                  }
-                  className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent"
-                  rows="1"
-                  disabled={isThinking}
-                />
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
-                  <label className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">
-                    <Image className="w-5 h-5" />
-                    <span className="text-sm">上传图片</span>
+                {/* 输入行：上传按钮 + 输入框 + 发送按钮 */}
+                <div className="flex items-center gap-2">
+                  {/* 上传图片按钮 */}
+                  <label className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors cursor-pointer ${
+                    isThinking || isGuidanceMode ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                  }`}>
+                    <Plus className="w-5 h-5" />
                     <input
                       type="file"
                       accept="image/*"
@@ -1956,41 +1939,51 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                       disabled={isThinking || isGuidanceMode}
                     />
                   </label>
+
+                  {/* 输入框 */}
+                  <div className="flex-1 relative">
+                    <textarea
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSolveQuestion();
+                        }
+                      }}
+                      placeholder={
+                        isGuidanceMode
+                          ? "请回答老师的问题..."
+                          : uploadedImage
+                          ? '输入问题，或直接点击"分析"按钮'
+                          : '输入你的问题...（上传图片后可说"不会"或"错了"启动诊断）'
+                      }
+                      className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent py-2"
+                      rows="1"
+                      disabled={isThinking}
+                    />
+                  </div>
+
+                  {/* 发送按钮 */}
                   <button
                     onClick={handleSolveQuestion}
                     disabled={(!question.trim() && !uploadedImage) || isThinking}
-                    className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg transition-colors font-medium ${
-                      isGuidanceMode
-                        ? 'bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300'
+                    className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
+                      isThinking
+                        ? 'bg-gray-300 cursor-not-allowed'
+                        : isGuidanceMode
+                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
                         : uploadedImage && !question.trim()
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50'
-                        : 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
+                        : (!question.trim() && !uploadedImage)
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
                     {isThinking ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>发送中...</span>
-                      </>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
                     ) : (
-                      <>
-                        {isGuidanceMode ? (
-                          <>
-                            <Sparkles className="w-4 h-4" />
-                            <span>回答</span>
-                          </>
-                        ) : uploadedImage && !question.trim() ? (
-                          <>
-                            <AlertCircle className="w-4 h-4" />
-                            <span>分析</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4" />
-                            <span>发送</span>
-                          </>
-                        )}
-                      </>
+                      <ArrowUp className="w-5 h-5" />
                     )}
                   </button>
                 </div>
