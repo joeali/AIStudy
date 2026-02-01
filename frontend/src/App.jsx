@@ -273,8 +273,9 @@ export default function AIStudyCompanion() {
 
         if (selectedMistakes.length > 0) {
           // 开始对选中的错题进行逐一引导
-          await startGuidanceForMistakes(selectedMistakes);
           setQuestion('');
+          // startGuidanceForMistakes 会管理自己的 isThinking 状态
+          await startGuidanceForMistakes(selectedMistakes);
           return;
         }
       } else if (trimmedQuestion === '重新检测') {
@@ -288,13 +289,15 @@ export default function AIStudyCompanion() {
 
     // 如果在引导模式，使用引导API
     if (isGuidanceMode) {
-      await continueGuidance(question);
       setQuestion('');
+      // continueGuidance 会管理自己的 isThinking 状态
+      await continueGuidance(question);
       return;
     }
 
     console.log('🚀 发送请求（后端会自动排队）...');
     setPendingRequests(prev => prev + 1);
+    setIsThinking(true);
 
     // 检查对话中最后一条是否是刚上传的图片消息（有image但content为空）
     const lastMessage = conversation[conversation.length - 1];
@@ -330,7 +333,9 @@ export default function AIStudyCompanion() {
       setMarkedErrors([]);
       setUploadedImage(null);
 
-      // 执行错题检测
+      // 执行错题检测（detectMistakes 会管理自己的 isThinking 状态）
+      setPendingRequests(prev => prev - 1);
+      setIsThinking(false);
       await detectMistakes(currentImage, currentMarks);
       return;
     } else {
@@ -350,7 +355,6 @@ export default function AIStudyCompanion() {
       setConversation(prev => [...prev, userMessage]);
     }
 
-    setIsThinking(true);
     console.log('[前端] 创建AI消息，设置showAnalyzing=true');
 
     // 创建一个空的助手消息，用于流式更新
@@ -418,8 +422,7 @@ export default function AIStudyCompanion() {
                     ? { ...msg, content: `抱歉，${data.error}`, showAnalyzing: false }
                     : msg
                 ));
-                setIsThinking(false);
-                setPendingRequests(prev => Math.max(0, prev - 1));
+                // finally 块会处理状态重置
                 return;
               }
 
@@ -450,8 +453,8 @@ export default function AIStudyCompanion() {
               }
 
               if (data.done) {
-                setIsThinking(false);
-                setPendingRequests(prev => Math.max(0, prev - 1));
+                // 流式传输完成，finally 块会处理状态重置
+                console.log('[前端] 收到完成信号');
               }
 
             } catch (e) {
