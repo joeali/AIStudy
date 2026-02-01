@@ -156,7 +156,7 @@ def generate_learning_analysis_prompt(mistakes_data, paper_info=""):
 
 **试卷基本信息：**
 - 检测到错题数量：{mistake_count}道
-- 试卷信息：{paper_info if paper_info else "数学试卷"}
+- 试卷信息：{paper_info if paper_info else "试卷"}
 
 **错题详情：**
 """

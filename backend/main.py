@@ -2285,7 +2285,56 @@ async def smart_analyze(request: DetectMistakesRequest):
         mistake_count = len(mistakes)
         print(f"[智能分析] 检测到 {mistake_count} 道错题")
 
-        # 步骤2: 判断内容类型
+        # 步骤2: 识别试卷学科类型
+        print(f"[智能分析] 步骤2: 识别试卷学科类型...")
+
+        subject_prompt = """请分析这张试卷，识别它属于哪个学科。
+
+可能的学科包括：
+- 数学
+- 语文
+- 英语
+- 物理
+- 化学
+- 生物
+- 历史
+- 地理
+- 政治
+
+请只返回学科名称，不要其他内容。如果无法确定，返回"未知"。"""
+
+        subject_messages = [{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                {"type": "text", "text": subject_prompt}
+            ]
+        }]
+
+        try:
+            subject = call_glm_api(subject_messages, model="glm-4v", skip_delay=True, max_tokens=50)
+            # 清理结果，提取学科名称
+            subject = subject.strip()
+            if any(kw in subject for kw in ["英语", "English", "english"]):
+                subject = "英语试卷"
+            elif any(kw in subject for kw in ["数学", "Math", "math"]):
+                subject = "数学试卷"
+            elif any(kw in subject for kw in ["语文", "Chinese", "chinese"]):
+                subject = "语文试卷"
+            elif any(kw in subject for kw in ["物理", "Physics", "physics"]):
+                subject = "物理试卷"
+            elif any(kw in subject for kw in ["化学", "Chemistry", "chemistry"]):
+                subject = "化学试卷"
+            elif "未知" in subject or len(subject) > 10:
+                subject = "试卷"
+            else:
+                subject = f"{subject}试卷"
+            print(f"[智能分析] 识别学科: {subject}")
+        except:
+            subject = "试卷"
+            print(f"[智能分析] 学科识别失败，使用默认值")
+
+        # 步骤3: 判断内容类型
         detection_result = {
             "user_marks_count": user_marks_count,
             "mistakes": mistakes
@@ -2294,14 +2343,14 @@ async def smart_analyze(request: DetectMistakesRequest):
         content_type = analyze_content_type(detection_result)
         print(f"[智能分析] 判断结果: {content_type}")
 
-        # 步骤3: 根据类型生成相应的分析
+        # 步骤4: 根据类型生成相应的分析
         if content_type["is_full_paper"]:
             # 整张试卷 - 生成学情分析
             print(f"[智能分析] 生成学情分析报告...")
 
             analysis_prompt = generate_learning_analysis_prompt(
                 {"mistakes": mistakes},
-                "数学试卷"
+                subject  # 使用识别出的学科类型
             )
 
             analysis_messages = [{
