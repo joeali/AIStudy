@@ -38,6 +38,16 @@ export default function AIStudyCompanion() {
   const [startPoint, setStartPoint] = useState(null);
   const [imageContainerRef, setImageContainerRef] = useState(null);
 
+  // 对话容器引用，用于自动滚动
+  const conversationEndRef = useRef(null);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (conversationEndRef.current) {
+      conversationEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [conversation]);
+
   // 图片弹窗相关状态
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImage, setModalImage] = useState(null);
@@ -1910,6 +1920,8 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                     </div>
                   </div>
                 ))}
+                {/* 滚动锚点 */}
+                <div ref={conversationEndRef} />
               </div>
 
               {/* 输入区域 - 固定在底部 */}
