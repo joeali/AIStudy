@@ -1944,7 +1944,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                           ? '输入问题，或直接点击"分析"按钮'
                           : '输入你的问题...（上传图片后可说"不会"或"错了"启动诊断）'
                       }
-                      className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent py-2 pr-2"
+                      className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent py-1 pr-2"
                       rows="1"
                       disabled={isThinking}
                     />
