@@ -8,6 +8,237 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 let messageIdCounter = 0;
 const generateMessageId = () => `msg_${Date.now()}_${messageIdCounter++}`;
 
+// 题目区域标记弹窗组件
+function QuestionMarkingModal({ image, marks, onMarksChange, onComplete, onCancel }) {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [startPos, setStartPos] = useState(null);
+  const [currentRect, setCurrentRect] = useState(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    // 计算图片显示尺寸
+    const updateImageSize = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.clientWidth - 32; // padding
+        const img = new Image();
+        img.onload = () => {
+          const ratio = img.width / img.height;
+          let width = containerWidth;
+          let height = width / ratio;
+          if (height > 500) {
+            height = 500;
+            width = height * ratio;
+          }
+          setImageSize({ width, height });
+        };
+        img.src = image.preview;
+      }
+    };
+
+    updateImageSize();
+    window.addEventListener('resize', updateImageSize);
+    return () => window.removeEventListener('resize', updateImageSize);
+  }, [image]);
+
+  const getCanvasCoords = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const handleMouseDown = (e) => {
+    const pos = getCanvasCoords(e);
+    setIsDrawing(true);
+    setStartPos(pos);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDrawing || !startPos) return;
+    const pos = getCanvasCoords(e);
+    setCurrentRect({
+      x: Math.min(startPos.x, pos.x),
+      y: Math.min(startPos.y, pos.y),
+      width: Math.abs(pos.x - startPos.x),
+      height: Math.abs(pos.y - startPos.y)
+    });
+  };
+
+  const handleMouseUp = () => {
+    if (!isDrawing || !currentRect) {
+      setIsDrawing(false);
+      setStartPos(null);
+      setCurrentRect(null);
+      return;
+    }
+
+    // 确保矩形有最小尺寸
+    if (currentRect.width > 20 && currentRect.height > 20) {
+      const newMark = {
+        ...currentRect,
+        questionNo: `题目${marks.length + 1}`
+      };
+      onMarksChange([...marks, newMark]);
+    }
+
+    setIsDrawing(false);
+    setStartPos(null);
+    setCurrentRect(null);
+  };
+
+  const handleDeleteMark = (index) => {
+    onMarksChange(marks.filter((_, i) => i !== index));
+  };
+
+  // 将显示坐标转换为图片实际坐标的百分比
+  const normalizeRect = (rect) => ({
+    x: rect.x / imageSize.width,
+    y: rect.y / imageSize.height,
+    width: rect.width / imageSize.width,
+    height: rect.height / imageSize.height
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="mb-4">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">标记题目区域</h3>
+          <p className="text-sm text-gray-600">在图片上拖动鼠标画出题目区域框，可以标记多个题目</p>
+        </div>
+
+        <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-gray-100 rounded-lg p-4 mb-4">
+          <div
+            style={{
+              position: 'relative',
+              width: imageSize.width,
+              height: imageSize.height
+            }}
+          >
+            <img
+              src={image.preview}
+              alt="试卷"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block'
+              }}
+            />
+            <canvas
+              ref={canvasRef}
+              width={imageSize.width}
+              height={imageSize.height}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                cursor: 'crosshair'
+              }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            />
+            {marks.map((mark, index) => (
+              <div
+                key={index}
+                style={{
+                  position: 'absolute',
+                  left: mark.x,
+                  top: mark.y,
+                  width: mark.width,
+                  height: mark.height,
+                  border: '3px solid #3b82f6',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  pointerEvents: 'none'
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-24px',
+                    left: '0',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {mark.questionNo}
+                </div>
+              </div>
+            ))}
+            {currentRect && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: currentRect.x,
+                  top: currentRect.y,
+                  width: currentRect.width,
+                  height: currentRect.height,
+                  border: '3px dashed #10b981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  pointerEvents: 'none'
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* 已标记的区域列表 */}
+        {marks.length > 0 && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <div className="text-sm font-medium text-gray-700 mb-2">已标记 {marks.length} 个区域</div>
+            <div className="flex flex-wrap gap-2">
+              {marks.map((mark, index) => (
+                <div
+                  key={index}
+                  className="px-3 py-1 bg-white border border-blue-200 rounded-full text-sm flex items-center gap-2"
+                >
+                  <span className="text-blue-700 font-medium">{mark.questionNo}</span>
+                  <button
+                    onClick={() => handleDeleteMark(index)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 按钮组 */}
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+          >
+            取消
+          </button>
+          <button
+            onClick={onComplete}
+            disabled={marks.length === 0}
+            className={`flex-1 py-3 rounded-lg transition-colors font-medium ${
+              marks.length === 0
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            完成标记
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AIStudyCompanion() {
   const [activeTab, setActiveTab] = useState('solve');
   const [question, setQuestion] = useState('');
@@ -59,6 +290,18 @@ export default function AIStudyCompanion() {
   const fileInputRef = useRef(null);
   const mistakeFileInputRef = useRef(null);
 
+  // 分析模式选择相关状态
+  const [showAnalysisModeSelector, setShowAnalysisModeSelector] = useState(false);
+  const [selectedImageForAnalysis, setSelectedImageForAnalysis] = useState(null);
+  const [analysisType, setAnalysisType] = useState(null); // 'full', 'mistakes', 'single_question'
+  const [showQuestionSelector, setShowQuestionSelector] = useState(false);
+  // 当前会话类型：'conversation'(普通对话) | 'full_analysis'(整体分析) | 'mistake_analysis'(错题分析)
+  const [currentSessionType, setCurrentSessionType] = useState('conversation');
+  // 用户手动标记题目区域
+  const [showQuestionMarking, setShowQuestionMarking] = useState(false);
+  const [questionMarks, setQuestionMarks] = useState([]); // 用户标记的题目区域
+  const [selectedQuestionMark, setSelectedQuestionMark] = useState(null); // 当前选中的题目区域
+
   // 显示Toast通知
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -67,23 +310,44 @@ export default function AIStudyCompanion() {
 
   // 从 localStorage 加载历史记录
   useEffect(() => {
-    const saved = localStorage.getItem('conversationHistory');
-    if (saved) {
-      try {
-        setConversationHistory(JSON.parse(saved));
-      } catch (e) {
-        console.error('加载历史记录失败:', e);
+    // 一次性清理：清除旧的可能包含图片的历史记录
+    try {
+      const saved = localStorage.getItem('conversationHistory');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 检查是否包含image字段（旧数据）
+        const hasImages = parsed.some(item =>
+          item.conversation && item.conversation.some(msg => msg.image)
+        );
+
+        if (hasImages) {
+          console.log('检测到旧的包含图片的历史记录，已清理');
+          localStorage.removeItem('conversationHistory');
+        } else {
+          setConversationHistory(parsed);
+        }
       }
+    } catch (e) {
+      console.error('加载历史记录失败:', e);
     }
 
     // 加载错题分析历史
-    const savedAnalysis = localStorage.getItem('analysisHistory');
-    if (savedAnalysis) {
-      try {
-        setAnalysisHistory(JSON.parse(savedAnalysis));
-      } catch (e) {
-        console.error('加载分析历史失败:', e);
+    try {
+      const savedAnalysis = localStorage.getItem('analysisHistory');
+      if (savedAnalysis) {
+        const parsed = JSON.parse(savedAnalysis);
+        // 检查是否包含image/imageData字段（旧数据）
+        const hasImages = parsed.some(item => item.image || item.imageData);
+
+        if (hasImages) {
+          console.log('检测到旧的包含图片的分析历史，已清理');
+          localStorage.removeItem('analysisHistory');
+        } else {
+          setAnalysisHistory(parsed);
+        }
       }
+    } catch (e) {
+      console.error('加载分析历史失败:', e);
     }
   }, []);
 
@@ -108,18 +372,38 @@ export default function AIStudyCompanion() {
   const saveToHistory = () => {
     if (conversation.length === 0) return;
 
+    // 过滤掉图片数据，只保存文本内容
+    const conversationWithoutImages = conversation.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      // 不存储image字段，避免localStorage配额超限
+      // image: msg.image
+    }));
+
     const historyItem = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
       preview: conversation[0]?.content?.substring(0, 50) + '...' || '新对话',
-      conversation: conversation,
+      conversation: conversationWithoutImages,
       question: question,
       hasImage: uploadedImage !== null
     };
 
-    const newHistory = [historyItem, ...conversationHistory].slice(0, 20); // 只保留最近20条
+    const newHistory = [historyItem, ...conversationHistory].slice(0, 10); // 减少到10条
     setConversationHistory(newHistory);
-    localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+
+    try {
+      localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+    } catch (error) {
+      console.warn('无法保存对话历史到localStorage:', error);
+      // 清空旧历史并重试
+      try {
+        localStorage.removeItem('conversationHistory');
+        localStorage.setItem('conversationHistory', JSON.stringify(newHistory.slice(0, 5)));
+      } catch (e) {
+        console.error('localStorage完全无法使用:', e);
+      }
+    }
   };
 
   // 保存错题分析到历史记录
@@ -129,14 +413,28 @@ export default function AIStudyCompanion() {
       timestamp: new Date().toISOString(),
       mistakes: mistakes,
       analysis: analysisContent,
-      image: image,
+      // 不存储图片，避免localStorage配额超限
+      // image: image,
+      hasImage: image !== null,
       mistakeCount: mistakes.length,
       preview: `检测到 ${mistakes.length} 道错题 - ${new Date().toLocaleDateString('zh-CN')}`
     };
 
-    const newHistory = [analysisItem, ...analysisHistory].slice(0, 50); // 保留最近50条
+    const newHistory = [analysisItem, ...analysisHistory].slice(0, 10); // 减少到10条
     setAnalysisHistory(newHistory);
-    localStorage.setItem('analysisHistory', JSON.stringify(newHistory));
+
+    try {
+      localStorage.setItem('analysisHistory', JSON.stringify(newHistory));
+    } catch (error) {
+      console.warn('无法保存分析历史到localStorage:', error);
+      // 清空旧历史并重试
+      try {
+        localStorage.removeItem('analysisHistory');
+        localStorage.setItem('analysisHistory', JSON.stringify(newHistory.slice(0, 5)));
+      } catch (e) {
+        console.error('localStorage完全无法使用:', e);
+      }
+    }
   };
 
   // 诊断和引导相关状态
@@ -199,26 +497,28 @@ export default function AIStudyCompanion() {
       // 提取学科分析（基于错题分布）
       const subjectMap = {};
       analysisHistory.forEach(item => {
-        item.mistakes.forEach(mistake => {
-          const subject = '综合'; // 可以从题号或分析中推断学科
-          if (!subjectMap[subject]) {
-            subjectMap[subject] = {
-              name: subject,
-              accuracy: Math.max(40, 100 - (totalMistakes * 2)),
-              change: 0,
-              weakPoints: [],
-              improvementPlan: {
-                targetPoints: Math.min(30, totalMistakes * 3),
-                weeks: 4,
-                actions: [
-                  '复习错题，总结解题方法',
-                  '加强基础知识点练习',
-                  '定期进行错题重做'
-                ]
-              }
-            };
-          }
-        });
+        if (item.mistakes && Array.isArray(item.mistakes)) {
+          item.mistakes.forEach(mistake => {
+            const subject = '综合'; // 可以从题号或分析中推断学科
+            if (!subjectMap[subject]) {
+              subjectMap[subject] = {
+                name: subject,
+                accuracy: Math.max(40, 100 - (totalMistakes * 2)),
+                change: 0,
+                weakPoints: [],
+                improvementPlan: {
+                  targetPoints: Math.min(30, totalMistakes * 3),
+                  weeks: 4,
+                  actions: [
+                    '复习错题，总结解题方法',
+                    '加强基础知识点练习',
+                    '定期进行错题重做'
+                  ]
+                }
+              };
+            }
+          });
+        }
       });
 
       // 使用最近的学情分析内容作为薄弱点
@@ -533,7 +833,7 @@ export default function AIStudyCompanion() {
 
         setConversation(prev => [...prev, {
           role: 'assistant',
-          content: '✅ 检测到错题，已自动添加到错题本！'
+          content: '检测到错题，已自动添加到错题本！'
         }]);
       }
     } catch (error) {
@@ -571,17 +871,9 @@ export default function AIStudyCompanion() {
           preview: event.target.result
         };
 
-        // 直接添加到对话中，而不是保存到 uploadedImage
-        const imageMessage = {
-          role: 'user',
-          content: '', // 空内容，不显示文字
-          image: imageData
-        };
-
-        setConversation(prev => [...prev, imageMessage]);
-
-        // 同时保存到 uploadedImage 供后续使用（但不显示在中间）
-        setUploadedImage(imageData);
+        // 保存图片并显示分析模式选择弹窗
+        setSelectedImageForAnalysis(imageData);
+        setShowAnalysisModeSelector(true);
 
         // 清空input
         e.target.value = '';
@@ -598,18 +890,282 @@ export default function AIStudyCompanion() {
     setUploadedImage(null);
   };
 
+  // ==================== 分析模式选择功能 ====================
+
+  // 选择分析模式
+  const handleSelectAnalysisMode = async (mode) => {
+    setAnalysisType(mode);
+
+    if (mode === 'single_question') {
+      // 显示区域标记界面
+      setShowAnalysisModeSelector(false);
+      setShowQuestionMarking(true);
+      setQuestionMarks([]); // 清空之前的标记
+    } else {
+      // 直接调用对应的API进行分析
+      await performAnalysis(mode);
+    }
+  };
+
+  // 处理用户标记题目区域
+  const handleQuestionMarkComplete = () => {
+    if (questionMarks.length === 0) {
+      showToast('请先标记至少一个题目区域', 'error');
+      return;
+    }
+    setShowQuestionMarking(false);
+    setShowQuestionSelector(true);
+  };
+
+  // 选择标记的题目区域并开始诊断
+  const handleSelectQuestionMark = async (mark) => {
+    setSelectedQuestionMark(mark);
+    setShowQuestionSelector(false);
+
+    // 添加图片到对话（带标记框）
+    const imageMessage = {
+      role: 'user',
+      content: `题目区域 ${mark.questionNo || questionMarks.indexOf(mark) + 1}`,
+      image: selectedImageForAnalysis,
+      markBox: mark // 保存标记框信息
+    };
+    setConversation(prev => [...prev, imageMessage]);
+
+    // 调用诊断API
+    await startDiagnosis(
+      mark.questionNo || `第${questionMarks.indexOf(mark) + 1}题`,
+      '不会做/做错了',
+      selectedImageForAnalysis.data
+    );
+  };
+
+  // 删除标记的题目区域
+  const handleDeleteQuestionMark = (index) => {
+    setQuestionMarks(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 执行分析（整体分析或错题分析）
+  const performAnalysis = async (mode) => {
+    setShowAnalysisModeSelector(false);
+
+    // 设置当前会话类型
+    if (mode === 'full') {
+      setCurrentSessionType('full_analysis');
+    } else {
+      setCurrentSessionType('mistake_analysis');
+    }
+
+    // 添加图片到对话
+    const imageMessage = {
+      role: 'user',
+      content: '',
+      image: selectedImageForAnalysis
+    };
+    setConversation(prev => [...prev, imageMessage]);
+
+    // 创建分析消息
+    const messageId = Date.now();
+    const modeText = mode === 'full' ? '整体分析' : '错题分析';
+    const assistantMessage = {
+      id: messageId,
+      role: 'assistant',
+      content: `🔍 正在进行${modeText}...`,
+      showAnalyzing: true
+    };
+    setConversation(prev => [...prev, assistantMessage]);
+
+    setIsThinking(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/analyze/smart/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_data: selectedImageForAnalysis.data,
+          image_type: selectedImageForAnalysis.type,
+          user_marks: [],
+          analysis_type: mode
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // 读取流式响应
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamedContent = '';
+      let finalData = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // 处理SSE格式的数据
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              // 错误处理
+              if (data.error) {
+                setConversation(prev => prev.map(msg =>
+                  msg.id === messageId
+                    ? { ...msg, content: `抱歉，${data.error}`, showAnalyzing: false }
+                    : msg
+                ));
+                setIsThinking(false);
+                return;
+              }
+
+              // 状态更新
+              if (data.status) {
+                let statusMsg = '';
+                switch (data.status) {
+                  case 'start':
+                    statusMsg = '开始分析试卷...';
+                    break;
+                  case 'detecting':
+                    statusMsg = '正在检测试卷中的错题...';
+                    break;
+                  case 'analyzing':
+                    // 根据分析模式显示不同的文案
+                    if (mode === 'full') {
+                      statusMsg = '正在生成学情分析报告...';
+                    } else if (mode === 'mistakes') {
+                      statusMsg = data.message || '正在分析错题讲解...';
+                    } else {
+                      statusMsg = data.message || '正在生成分析...';
+                    }
+                    break;
+                  default:
+                    statusMsg = data.message || '分析中...';
+                }
+                setConversation(prev => prev.map(msg =>
+                  msg.id === messageId
+                    ? { ...msg, content: statusMsg }
+                    : msg
+                ));
+              }
+
+              // 内容更新
+              if (data.content) {
+                streamedContent += data.content;
+                setConversation(prev => prev.map(msg =>
+                  msg.id === messageId
+                    ? { ...msg, content: streamedContent, showAnalyzing: false }
+                    : msg
+                ));
+              }
+
+              // 完成并获取最终数据
+              if (data.done && data.data) {
+                finalData = data.data;
+              }
+
+            } catch (e) {
+              console.error('解析SSE数据失败:', e);
+            }
+          }
+        }
+      }
+
+      // 保存到历史记录
+      if (finalData) {
+        // 保存对话内容到对话历史（整体分析和错题分析都保存）
+        const conversationWithoutImages = conversation.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
+        const modeText = mode === 'full' ? '整体分析' : '错题分析';
+        const historyItem = {
+          id: messageId,
+          timestamp: new Date().toISOString(),
+          preview: modeText + '：' + (streamedContent.substring(0, 50) + '...' || '试卷分析'),
+          conversation: conversationWithoutImages,
+          question: modeText,
+          hasImage: true,
+          sessionType: mode === 'full' ? 'full_analysis' : 'mistake_analysis'
+        };
+
+        setConversationHistory(prev => {
+          const newHistory = [historyItem, ...prev].slice(0, 10);
+          try {
+            localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+          } catch (error) {
+            console.warn('无法保存对话历史到localStorage:', error);
+            try {
+              localStorage.removeItem('conversationHistory');
+              localStorage.setItem('conversationHistory', JSON.stringify(newHistory.slice(0, 5)));
+            } catch (e) {
+              console.error('localStorage完全无法使用:', e);
+            }
+          }
+          return newHistory;
+        });
+
+        // 错题分析也保存到错题分析历史
+        if (mode !== 'full') {
+          const historyEntry = {
+            id: messageId,
+            type: 'analysis',
+            mode: mode,
+            result: finalData,
+            timestamp: new Date().toISOString()
+          };
+
+          setAnalysisHistory(prev => {
+            const updated = [historyEntry, ...prev].slice(0, 10);
+            try {
+              localStorage.setItem('analysisHistory', JSON.stringify(updated));
+            } catch (error) {
+              console.warn('无法保存到localStorage（可能是配额已满）:', error);
+              try {
+                localStorage.removeItem('analysisHistory');
+                localStorage.setItem('analysisHistory', JSON.stringify(updated.slice(0, 5)));
+              } catch (e) {
+                console.error('localStorage完全无法使用:', e);
+              }
+            }
+            return updated;
+          });
+        }
+      }
+
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setConversation(prev => prev.map(msg =>
+        msg.id === messageId
+          ? { ...msg, content: `分析失败：${error.message}`, showAnalyzing: false }
+          : msg
+      ));
+    } finally {
+      setIsThinking(false);
+      setSelectedImageForAnalysis(null);
+    }
+  };
+
   // ==================== 诊断和引导功能 ====================
 
   // 开始诊断流程
   const startDiagnosis = async (questionText, studentAnswer, image) => {
     setIsThinking(true);
+    setCurrentSessionType('conversation'); // 诊断属于普通对话
 
     // 创建消息ID用于流式更新
     const assistantMessageId = Date.now();
     const assistantMessage = {
       id: assistantMessageId,
       role: 'assistant',
-      content: '🔍 正在分析错误原因...'
+      content: '正在分析错误原因...'
     };
     setConversation(prev => [...prev, assistantMessage]);
 
@@ -699,7 +1255,7 @@ export default function AIStudyCompanion() {
           msg.id === assistantMessageId
             ? {
                 ...msg,
-                content: `📋 **诊断结果**
+                content: `诊断结果
 
 **知识点**: ${finalData.knowledge_point}
 **错误类型**: ${finalData.error_type}
@@ -750,7 +1306,7 @@ ${mistakes.map((m, idx) => `${idx + 1}. 第${m.question_no || '?'}题`).join('\n
 
 ---
 
-👨‍🏫 **第一道题：第${mistakes[0].question_no || '?'}题**
+第一道题：第${mistakes[0].question_no || '?'}题**
 
 现在，请告诉我这道题的内容，或者直接上传题目图片，我会引导你一步步解答。
 
@@ -770,6 +1326,7 @@ ${mistakes.map((m, idx) => `${idx + 1}. 第${m.question_no || '?'}题`).join('\n
   const startGuidance = async (questionText, diagnosis) => {
     setIsThinking(true);
     setIsGuidanceMode(true);
+    setCurrentSessionType('conversation'); // 引导对话属于普通对话
 
     // 创建消息ID用于流式更新
     const assistantMessageId = Date.now();
@@ -858,12 +1415,12 @@ ${mistakes.map((m, idx) => `${idx + 1}. 第${m.question_no || '?'}题`).join('\n
         msg.id === assistantMessageId
           ? {
               ...msg,
-              content: `👨‍🏫 **开始引导**
+              content: `开始引导
 
 ${streamedContent}
 
 ---
-💡 请回答老师的问题，我会一步步引导你找到正确答案。
+请回答老师的问题，我会一步步引导你找到正确答案。
 （输入"退出引导"返回普通对话模式）`,
               isGuidance: true
             }
@@ -897,7 +1454,7 @@ ${streamedContent}
       setCurrentGuidingMistake(null);
       setConversation(prev => [...prev, {
         role: 'assistant',
-        content: '✅ 已退出引导模式，回到普通对话。'
+        content: '已退出引导模式，回到普通对话。'
       }]);
       return;
     }
@@ -915,11 +1472,11 @@ ${streamedContent}
           content: userMessage
         }, {
           role: 'assistant',
-          content: `✅ 已跳过第${currentGuidingMistake.question_no || '?'}题
+          content: `已跳过第${currentGuidingMistake.question_no || '?'}题
 
 ---
 
-👨‍🏫 **下一道题：第${nextMistake.question_no || '?'}题**
+下一道题：第${nextMistake.question_no || '?'}题**
 
 请告诉我这道题的内容，或上传题目图片，我会引导你一步步解答。`,
           isGuidance: true
@@ -933,11 +1490,11 @@ ${streamedContent}
           role: 'assistant',
           content: `🎉 恭喜！你已经完成了所有错题的引导学习。
 
-📊 **学习总结**：
+学习总结：
 - 共学习了 ${detectedMistakes.length} 道错题
 - 使用了苏格拉底式引导方法，通过提问启发思考
 
-💡 **建议**：
+建议：
 1. 复习今天学习到的解题方法
 2. 对错题进行整理和总结
 3. 尝试独立解答类似的题目
@@ -1157,7 +1714,7 @@ ${streamedContent}
                 } else if (data.status === 'no_mistakes') {
                   setConversation(prev => prev.map(msg =>
                     msg.id === assistantMessageId
-                      ? { ...msg, content: data.message || '✅ 没有发现明显的错题标记。这张试卷看起来做得很好！' }
+                      ? { ...msg, content: data.message || '没有发现明显的错题标记。这张试卷看起来做得很好！' }
                       : msg
                   ));
                 }
@@ -1596,20 +2153,98 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
               { id: 'analysis', label: '学习分析', icon: BarChart3 },
               { id: 'quiz', label: '练习生成', icon: Target }
             ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                  activeTab === tab.id
-                    ? 'text-blue-600'
-                    : 'text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'}`} />
-                <span className="font-medium text-sm">{tab.label}</span>
-              </button>
+              <div key={tab.id} className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                    activeTab === tab.id
+                      ? 'text-blue-600'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'}`} />
+                  <span className="font-medium text-sm">{tab.label}</span>
+                </button>
+                {/* AI解题行的右侧New question按钮 */}
+                {tab.id === 'solve' && activeTab === 'solve' && (
+                  <button
+                    onClick={() => {
+                      // 保存当前对话到历史记录
+                      if (conversation.length > 0) {
+                        if (currentSessionType === 'full_analysis') {
+                          // 整体分析 - 保存到对话历史
+                          const conversationWithoutImages = conversation.map(msg => ({
+                            role: msg.role,
+                            content: msg.content
+                          }));
+
+                          const historyItem = {
+                            id: Date.now(),
+                            timestamp: new Date().toISOString(),
+                            preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
+                            conversation: conversationWithoutImages,
+                            question: '整体分析',
+                            hasImage: uploadedImage !== null,
+                            sessionType: 'full_analysis'
+                          };
+
+                          const newHistory = [historyItem, ...conversationHistory].slice(0, 10);
+                          try {
+                            localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+                            setConversationHistory(newHistory);
+                          } catch (error) {
+                            console.warn('无法保存对话历史到localStorage:', error);
+                          }
+                        } else if (currentSessionType === 'mistake_analysis') {
+                          // 错题分析 - 不需要在这里保存，因为已经在performAnalysis中保存了
+                        } else {
+                          // 普通对话 - 保存到对话历史
+                          saveConversationToHistory();
+                        }
+                      }
+
+                      // 清空所有状态
+                      setConversation([]);
+                      setQuestion('');
+                      setUploadedImage(null);
+                      setIsGuidanceMode(false);
+                      setCurrentDiagnosis(null);
+                      setGuidanceConversation([]);
+                      setDetectedMistakes([]);
+                      setCurrentSessionType('conversation');
+                    }}
+                    className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                    title="新对话"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span className="font-medium">New</span>
+                  </button>
+                )}
+              </div>
             ))}
           </nav>
+
+          {/* 分隔符 */}
+          <div className="mx-4 my-2 border-t border-gray-300"></div>
+
+          {/* 历史记录按钮 */}
+          <div className="px-4">
+            <button
+              onClick={() => {
+                setHistoryTab('conversation');
+                setShowHistory(true);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-gray-200 transition-all relative"
+            >
+              <Clock className="w-5 h-5 text-gray-500" />
+              <span className="font-medium text-sm">历史记录</span>
+              {(conversationHistory.length > 0 || analysisHistory.length > 0) && (
+                <span className="ml-auto w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center">
+                  {conversationHistory.length + analysisHistory.length}
+                </span>
+              )}
+            </button>
+          </div>
 
           {/* 底部 Apps 区域 */}
           <div className="absolute bottom-4 left-4 right-4">
@@ -1635,228 +2270,6 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         {/* AI解题标签 */}
         {activeTab === 'solve' && (
           <div className="space-y-6">
-            {/* 顶部操作按钮 */}
-            <div className="flex justify-between items-center">
-              <button
-                onClick={() => {
-                  // 清空所有状态
-                  setConversation([]);
-                  setQuestion('');
-                  setUploadedImage(null);
-                  setIsGuidanceMode(false);
-                  setCurrentDiagnosis(null);
-                  setGuidanceConversation([]);
-                  setDetectedMistakes([]);
-                }}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="text-sm font-medium">New question</span>
-              </button>
-              <button
-                onClick={() => {
-                  setHistoryTab('conversation');
-                  setShowHistory(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors relative"
-              >
-                <Clock className="w-4 h-4" />
-                <span className="text-sm font-medium">History</span>
-                {(conversationHistory.length > 0 || analysisHistory.length > 0) && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center">
-                    {conversationHistory.length + analysisHistory.length}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* 历史记录对话框 */}
-            {showHistory && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-                  <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-800">历史记录</h2>
-                    <button
-                      onClick={() => setShowHistory(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-gray-600" />
-                    </button>
-                  </div>
-
-                  {/* 标签页切换 */}
-                  <div className="flex border-b border-gray-200">
-                    <button
-                      className={`flex-1 px-6 py-3 text-sm font-medium ${historyTab === 'conversation' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                      onClick={() => setHistoryTab('conversation')}
-                    >
-                      对话历史 ({conversationHistory.length})
-                    </button>
-                    <button
-                      className={`flex-1 px-6 py-3 text-sm font-medium ${historyTab === 'analysis' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                      onClick={() => setHistoryTab('analysis')}
-                    >
-                      错题分析 ({analysisHistory.length})
-                    </button>
-                  </div>
-
-                  <div className="p-6 overflow-y-auto max-h-[55vh]">
-                    {historyTab === 'conversation' ? (
-                      // 对话历史
-                      conversationHistory.length === 0 ? (
-                        <div className="text-center py-12">
-                          <Clock className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                          <p className="text-gray-600 mb-2">还没有对话历史</p>
-                          <p className="text-sm text-gray-500">开始对话后，记录会自动保存在这里</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {conversationHistory.map((item) => (
-                            <div
-                              key={item.id}
-                              className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
-                              onClick={() => {
-                                setConversation(item.conversation);
-                                setShowHistory(false);
-                              }}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  {item.hasImage && <Image className="w-4 h-4 text-blue-600" />}
-                                  <span className="text-sm font-medium text-gray-800">
-                                    {item.preview}
-                                  </span>
-                                </div>
-                                <span className="text-xs text-gray-500">
-                                  {new Date(item.timestamp).toLocaleString('zh-CN', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </span>
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {item.conversation.length} 条消息
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    ) : (
-                      // 错题分析历史
-                      analysisHistory.length === 0 ? (
-                        <div className="text-center py-12">
-                          <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                          <p className="text-gray-600 mb-2">还没有错题分析记录</p>
-                          <p className="text-sm text-gray-500">上传试卷进行错题检测后，记录会保存在这里</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {analysisHistory.map((item) => (
-                            <div
-                              key={item.id}
-                              className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
-                            >
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex-1">
-                                  <h3 className="font-medium text-gray-800 mb-1">{item.preview}</h3>
-                                  <p className="text-xs text-gray-500">
-                                    {new Date(item.timestamp).toLocaleString('zh-CN', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </p>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                    onClick={() => {
-                                      // 查看详情
-                                      setShowHistory(false);
-                                      setUploadedImage(item.image);
-                                      setConversation([
-                                        {
-                                          role: 'assistant',
-                                          content: `📊 **历史分析记录**\n\n检测到 ${item.mistakeCount} 道错题\n\n${item.mistakes.map((m, i) => `${i + 1}. 第${m.question_no}题`).join('\n')}\n\n---\n\n${item.analysis}`
-                                        }
-                                      ]);
-                                    }}
-                                  >
-                                    查看详情
-                                  </button>
-                                  <button
-                                    className="px-3 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
-                                    onClick={() => {
-                                      if (confirm('确定删除这条分析记录吗？')) {
-                                        const newHistory = analysisHistory.filter(h => h.id !== item.id);
-                                        setAnalysisHistory(newHistory);
-                                        localStorage.setItem('analysisHistory', JSON.stringify(newHistory));
-                                      }
-                                    }}
-                                  >
-                                    删除
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* 错题列表 */}
-                              <div className="mb-3">
-                                <p className="text-xs font-medium text-gray-600 mb-2">检测到的错题：</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {item.mistakes.map((mistake, idx) => (
-                                    <span key={idx} className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded">
-                                      第{mistake.question_no}题
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {/* 缩略图 */}
-                              {item.image && (
-                                <div className="mt-2">
-                                  <img
-                                    src={item.image.preview}
-                                    alt="试卷缩略图"
-                                    className="w-32 h-auto rounded border border-gray-200 cursor-pointer hover:border-blue-400"
-                                    onClick={() => {
-                                      setShowImageModal(true);
-                                      setModalImage(item.image);
-                                    }}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    )}
-                  </div>
-
-                  <div className="p-4 border-t border-gray-200 bg-gray-50">
-                    <button
-                      onClick={() => {
-                        if (confirm('确定要清空所有历史记录吗？')) {
-                          if (historyTab === 'conversation') {
-                            setConversationHistory([]);
-                            localStorage.removeItem('conversationHistory');
-                          } else {
-                            setAnalysisHistory([]);
-                            localStorage.removeItem('analysisHistory');
-                          }
-                        }
-                      }}
-                      className="w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
-                    >
-                      清空{historyTab === 'conversation' ? '对话' : '分析'}历史
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* 主要内容区域 - 使用 flex 布局固定输入框 */}
             <div className="flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
@@ -1949,13 +2362,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                           handleSolveQuestion();
                         }
                       }}
-                      placeholder={
-                        isGuidanceMode
-                          ? "请回答老师的问题..."
-                          : uploadedImage
-                          ? '输入问题，或直接点击"分析"按钮'
-                          : '输入你的问题...（上传图片后可说"不会"或"错了"启动诊断）'
-                      }
+                      placeholder="输入你的问题..."
                       className="w-full resize-none outline-none text-gray-700 placeholder-gray-400 bg-transparent py-1 pr-2"
                       rows="1"
                       disabled={isThinking}
@@ -2007,6 +2414,182 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
           </div>
         )}
 
+
+        {/* 历史记录对话框 */}
+        {showHistory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-800">历史记录</h2>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+
+              {/* 标签页切换 */}
+              <div className="flex border-b border-gray-200">
+                <button
+                  className={`flex-1 px-6 py-3 text-sm font-medium ${historyTab === 'conversation' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                  onClick={() => setHistoryTab('conversation')}
+                >
+                  对话历史 ({conversationHistory.length})
+                </button>
+                <button
+                  className={`flex-1 px-6 py-3 text-sm font-medium ${historyTab === 'analysis' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                  onClick={() => setHistoryTab('analysis')}
+                >
+                  错题分析 ({analysisHistory.length})
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto max-h-[55vh]">
+                {historyTab === 'conversation' ? (
+                  // 对话历史
+                  conversationHistory.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Clock className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-600 mb-2">还没有对话历史</p>
+                      <p className="text-sm text-gray-500">开始对话后，记录会自动保存在这里</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {conversationHistory.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                          onClick={() => {
+                            // 恢复对话内容
+                            setConversation(item.conversation);
+                            // 恢复会话类型
+                            if (item.sessionType) {
+                              setCurrentSessionType(item.sessionType);
+                            } else {
+                              setCurrentSessionType('conversation');
+                            }
+                            // 恢复问题文本（如果有的话）
+                            if (item.question) {
+                              setQuestion(item.question);
+                            }
+                            // 关闭历史记录对话框
+                            setShowHistory(false);
+                          }}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {item.hasImage && <Image className="w-4 h-4 text-blue-600" />}
+                              <span className="text-sm font-medium text-gray-800">
+                                {item.preview}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {new Date(item.timestamp).toLocaleString('zh-CN', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {item.conversation.length} 条消息
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  // 错题分析历史
+                  analysisHistory.length === 0 ? (
+                    <div className="text-center py-12">
+                      <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-600 mb-2">还没有分析历史</p>
+                      <p className="text-sm text-gray-500">上传试卷分析后，记录会自动保存在这里</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {analysisHistory.map((item) => {
+                        // 在对话历史中查找对应的对话记录
+                        const conversationItem = conversationHistory.find(ch => ch.id === item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
+                          >
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => {
+                                // 如果有对应的对话记录，恢复对话
+                                if (conversationItem) {
+                                  setConversation(conversationItem.conversation);
+                                  setCurrentSessionType(conversationItem.sessionType || 'conversation');
+                                  if (conversationItem.question) {
+                                    setQuestion(conversationItem.question);
+                                  }
+                                  setShowHistory(false);
+                                } else {
+                                  // 没有对话记录，显示详情
+                                  setSelectedHistoryAnalysis(item);
+                                  setShowHistoryAnalysis(true);
+                                  setShowHistory(false);
+                                }
+                              }}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-800">
+                                  {item.mode === 'full' ? '整体分析' : '错题讲解'}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(item.timestamp).toLocaleString('zh-CN', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              {item.result && item.result.mistakes && (
+                                <div className="mt-2 text-xs text-gray-500">
+                                  检测到 {item.result.mistakes.length} 道错题
+                                </div>
+                              )}
+                              {conversationItem && (
+                                <div className="mt-2 text-xs text-blue-600">
+                                  点击恢复对话
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="p-4 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => {
+                    if (confirm('确定要清空所有历史记录吗？')) {
+                      if (historyTab === 'conversation') {
+                        setConversationHistory([]);
+                        localStorage.removeItem('conversationHistory');
+                      } else {
+                        setAnalysisHistory([]);
+                        localStorage.removeItem('analysisHistory');
+                      }
+                    }
+                  }}
+                  className="w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+                >
+                  清空{historyTab === 'conversation' ? '对话' : '分析'}历史
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* 错题本标签 */}
         {activeTab === 'mistakes' && (
           <div className="space-y-6">
@@ -2020,12 +2603,12 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                   accept="image/*"
                   onChange={handleImageUploadForMistake}
                   className="hidden"
-                  disabled={isThinking}
+                  disabled={activeTab === 'mistakes' && isThinking}
                 />
               </label>
             </div>
 
-            {isThinking && (
+            {activeTab === 'mistakes' && isThinking && (
               <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                 <div className="flex items-center gap-3">
                   <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
@@ -2225,10 +2808,10 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
 
                           <button
                             onClick={() => generatePracticeForWeakPoint(subject.name, wp.topic, wp.caseStudy)}
-                            disabled={isThinking}
+                            disabled={activeTab === 'analysis' && isThinking}
                             className="w-full py-3 text-white rounded-lg font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all"
                           >
-                            {isThinking ? (
+                            {activeTab === 'analysis' && isThinking ? (
                               <>
                                 <RefreshCw className="w-5 h-5 animate-spin" />
                                 生成中...
@@ -2262,10 +2845,10 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
 
             <button
               onClick={generateLearningReport}
-              disabled={isThinking}
+              disabled={activeTab === 'analysis' && isThinking}
               className="w-full py-4 text-white rounded-lg font-semibold text-lg flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all"
             >
-              {isThinking ? (
+              {activeTab === 'analysis' && isThinking ? (
                 <>
                   <RefreshCw className="w-5 h-5 animate-spin" />
                   生成中...
@@ -2355,10 +2938,10 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
 
                     <button
                       onClick={() => generateSubjectQuiz(subject.name, subject.weakPoints)}
-                      disabled={isThinking}
+                      disabled={activeTab === 'quiz' && isThinking}
                       className="w-full py-3 text-white rounded-lg font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all"
                     >
-                      {isThinking ? (
+                      {activeTab === 'quiz' && isThinking ? (
                         <>
                           <RefreshCw className="w-5 h-5 animate-spin" />
                           生成中...
@@ -2651,14 +3234,145 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         </div>
       )}
 
-      {/* 页脚 */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center text-sm text-gray-500">
-            <p>AI伴学助手</p>
+      {/* 分析模式选择弹窗 */}
+      {showAnalysisModeSelector && selectedImageForAnalysis && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold mb-2 text-gray-900">选择分析模式</h3>
+            <p className="text-sm text-gray-600 mb-4">请选择您希望如何分析这张试卷</p>
+
+            {/* 图片预览 */}
+            <div className="mb-6 flex justify-center bg-gray-50 rounded-lg p-4">
+              <img src={selectedImageForAnalysis.preview} className="max-h-48 rounded-lg shadow-md" alt="上传的试卷" />
+            </div>
+
+            {/* 三个选项卡片 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {/* 整体分析 */}
+              <button
+                onClick={() => handleSelectAnalysisMode('full')}
+                className="p-5 bg-blue-50 rounded-xl hover:bg-blue-100 transition-all border-2 border-transparent hover:border-blue-300 group"
+              >
+                <BookOpen className="w-10 h-10 mx-auto mb-3 text-blue-500 group-hover:scale-110 transition-transform" />
+                <p className="font-bold text-gray-900 mb-1">整体分析</p>
+                <p className="text-xs text-gray-600">生成学情分析报告</p>
+              </button>
+
+              {/* 分析错题 */}
+              <button
+                onClick={() => handleSelectAnalysisMode('mistakes')}
+                className="p-5 bg-orange-50 rounded-xl hover:bg-orange-100 transition-all border-2 border-transparent hover:border-orange-300 group"
+              >
+                <AlertCircle className="w-10 h-10 mx-auto mb-3 text-orange-500 group-hover:scale-110 transition-transform" />
+                <p className="font-bold text-gray-900 mb-1">分析错题</p>
+                <p className="text-xs text-gray-600">错题详细讲解</p>
+              </button>
+
+              {/* 针对题目 */}
+              <button
+                onClick={() => handleSelectAnalysisMode('single_question')}
+                className="p-5 bg-green-50 rounded-xl hover:bg-green-100 transition-all border-2 border-transparent hover:border-green-300 group"
+              >
+                <Target className="w-10 h-10 mx-auto mb-3 text-green-500 group-hover:scale-110 transition-transform" />
+                <p className="font-bold text-gray-900 mb-1">针对题目</p>
+                <p className="text-xs text-gray-600">选择题目讲解</p>
+              </button>
+            </div>
+
+            {/* 取消按钮 */}
+            <button
+              onClick={() => {
+                setShowAnalysisModeSelector(false);
+                setSelectedImageForAnalysis(null);
+              }}
+              className="w-full py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+            >
+              取消
+            </button>
           </div>
         </div>
-      </footer>
+      )}
+
+      {/* 题目区域标记弹窗 */}
+      {showQuestionMarking && selectedImageForAnalysis && (
+        <QuestionMarkingModal
+          image={selectedImageForAnalysis}
+          marks={questionMarks}
+          onMarksChange={setQuestionMarks}
+          onComplete={handleQuestionMarkComplete}
+          onCancel={() => {
+            setShowQuestionMarking(false);
+            setSelectedImageForAnalysis(null);
+          }}
+        />
+      )}
+
+      {/* 题目选择弹窗 */}
+      {showQuestionSelector && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
+            <h3 className="text-lg font-bold mb-2 text-gray-900">选择要讲解的题目</h3>
+            <p className="text-sm text-gray-600 mb-4">请选择您想了解的题目</p>
+
+            {questionMarks.length > 0 ? (
+              <>
+                {/* 题目区域列表 */}
+                <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+                  {questionMarks.map((mark, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSelectQuestionMark(mark)}
+                      className="w-full p-4 text-left bg-gray-50 hover:bg-blue-50 rounded-lg transition-all border-2 border-transparent hover:border-blue-300 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 mb-1">
+                            {mark.questionNo || `题目区域 ${index + 1}`}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            点击此区域开始讲解
+                          </div>
+                        </div>
+                        <ArrowUp className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors rotate-90 flex-shrink-0" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* 取消按钮 */}
+                <button
+                  onClick={() => {
+                    setShowQuestionSelector(false);
+                    setSelectedImageForAnalysis(null);
+                    setQuestionMarks([]);
+                  }}
+                  className="w-full py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                >
+                  取消
+                </button>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-gray-600 mb-4">没有标记的题目区域</p>
+                  <button
+                    onClick={() => {
+                      setShowQuestionSelector(false);
+                      setSelectedImageForAnalysis(null);
+                    }}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    返回
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

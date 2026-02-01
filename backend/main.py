@@ -122,6 +122,7 @@ class DetectMistakesRequest(BaseModel):
     image_data: str  # base64 编码的图片
     image_type: str = "image/jpeg"  # 图片类型
     user_marks: Optional[List[dict]] = []  # 用户手动标记的错题位置 [{"x": 50, "y": 30}, ...]
+    analysis_type: Optional[str] = None  # 分析类型: 'full'(整张试卷), 'mistakes'(错题分析), None(自动判断)
 
 # ==================== 工具函数 ====================
 def decode_base64_image(base64_str: str) -> Image.Image:
@@ -696,22 +697,17 @@ async def chat(request: ChatRequest):
                             # 返回诊断+引导的结果
                             return {
                                 "success": True,
-                                "response": f"""📋 **题目分析**
+                                "response": f"""题目分析
 {question_text}
 
----
+诊断结果
+知识点: {diagnosis_data.get('knowledge_point', '未识别')}
+问题: {diagnosis_data.get('problem_description', '未识别')}
 
-📋 **诊断结果**
-**知识点**: {diagnosis_data.get('knowledge_point', '未识别')}
-**问题**: {diagnosis_data.get('problem_description', '未识别')}
-
----
-
-👨‍🏫 **开始引导**
+开始引导
 {guide_response}
 
----
-💡 请回答老师的问题,我会一步步引导你找到正确答案. (输入"退出"返回普通模式)""",
+请回答老师的问题,我会一步步引导你找到正确答案。(输入"退出"返回普通模式)""",
                                 "diagnosis": diagnosis_data,
                                 "question": question_text,
                                 "mode": "guidance"
@@ -725,7 +721,7 @@ async def chat(request: ChatRequest):
                 enhanced_prompt = f"""你是一位耐心的老师,正在辅导学生。学生问: {user_message}
 
 请用苏格拉底式引导方法帮助学生:
-1. **不要直接给出答案或详细解题步骤**
+1. 不要直接给出答案或详细解题步骤
 2. 提出启发性的问题,引导学生自己思考
 3. 每次只问一个关键问题
 4. 如果学生需要帮助,给出逐步递进的提示(先浅提示,再深提示)
@@ -949,7 +945,7 @@ async def diagnose_error_stream(request: DiagnoseRequest):
     """
     async def generate_stream():
         try:
-            yield f"data: {json.dumps({'status': 'analyzing', 'message': '🔍 正在分析错误原因...'})}\n\n"
+            yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在分析错误原因...'})}\n\n"
 
             # 构建诊断 prompt
             diagnose_prompt = f"""你是一位有20年教学经验的初中数学老师.
@@ -1580,25 +1576,25 @@ async def detect_mistakes(request: DetectMistakesRequest):
             # 优化的 prompt - 专注于红叉/红圈标记识别
             detect_prompt = """找出试卷上的错题. 错题必须有清晰的红色×标记在答案上.
 
-**什么是错题(必须满足全部条件)**:
+什么是错题(必须满足全部条件):
 1. 答案选项(A/B/C/D)上有红色×
 2. ×号清晰可见,两条交叉线都清楚
 3. ×号明显是红色笔迹
 
-**绝对不是错题**:
+绝对不是错题:
 - 答案打钩√ → 正确
 - 题号有任何标记 → 不影响判断
 - 答案只有圈, 线, 点但没有× → 不是错题
 - ×号模糊不清或不确定 → 不标记
 
-**判断流程**:
+判断流程:
 对每个题的答案(A/B/C/D):
 - 仔细看: 这个选项上有清晰的红色×吗?
 -- 非常确定有× → 错题
 -- 不太确定或模糊 → 不标记
 -- 没有× → 正确
 
-**宁可漏检,绝不误判!**
+宁可漏检,绝不误判!
 
 返回JSON格式:
 ```json
@@ -1732,15 +1728,15 @@ async def detect_mistakes(request: DetectMistakesRequest):
 
 检测到的错题: {mistakes_str}(共{len(mistakes_list)}道)
 
-请生成详细学情分析报告(参考以下格式): 
+请生成详细学情分析报告(参考以下格式):
 
-**一, 学习现状分析**
+一, 学习现状分析
 从卷面看,总结学生的学习优势(3点)
 
-**二, 薄弱点与失分原因**
+二, 薄弱点与失分原因
 针对错题分析失分原因和薄弱环节
 
-**三, 针对性学习建议**
+三, 针对性学习建议
 给出3-5条具体可操作的建议
 
 要求: 专业, 详细, 有针对性, 鼓励性语气. """
@@ -1861,7 +1857,7 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
             sys.stdout.flush()
 
             # 发送开始检测信号
-            yield f"data: {json.dumps({'status': 'start', 'message': '🔍 开始分析试卷...'})}\n\n"
+            yield f"data: {json.dumps({'status': 'start', 'message': '开始分析试卷...'})}\n\n"
 
             # 解码图片
             try:
@@ -1956,7 +1952,7 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
 
                 if mistakes_list:
                     # 逐步发送结果
-                    yield f"data: {json.dumps({'status': 'found', 'count': len(mistakes_list), 'message': f'✅ 找到 {len(mistakes_list)} 道需要分析的题目'})}\n\n"
+                    yield f"data: {json.dumps({'status': 'found', 'count': len(mistakes_list), 'message': f'找到 {len(mistakes_list)} 道需要分析的题目'})}\n\n"
 
                     # 生成详细分析
                     mistakes_str = ", ".join([m["question_no"] for m in mistakes_list])
@@ -1964,13 +1960,13 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
 
 请生成详细学情分析报告(参考以下格式):
 
-**一、学习现状分析**
+一、学习现状分析
 从卷面看,总结学生的学习优势(3点)
 
-**二、薄弱点与失分原因**
+二、薄弱点与失分原因
 针对错题分析失分原因和薄弱环节
 
-**三、针对性学习建议**
+三、针对性学习建议
 给出3-5条具体可操作的建议
 
 要求: 专业, 详细, 有针对性, 鼓励性语气."""
@@ -2012,7 +2008,7 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
 2. 红笔批改 - 被老师标记为错误的题目
 3. 学生答案明显错误
 
-**重要：请严格按照以下格式回答，不要包含其他内容**
+重要：请严格按照以下格式回答，不要包含其他内容
 
 格式要求：
 - 如果有错题：只回答"第X题、第Y题、第Z题"（用顿号分隔）
@@ -2104,23 +2100,23 @@ async def detect_mistakes_stream(request: DetectMistakesRequest):
                 sys.stdout.flush()
 
                 if mistakes_list:
-                    yield f"data: {json.dumps({'status': 'found', 'count': len(mistakes_list), 'message': f'✅ 检测到 {len(mistakes_list)} 道错题'})}\n\n"
+                    yield f"data: {json.dumps({'status': 'found', 'count': len(mistakes_list), 'message': f'检测到 {len(mistakes_list)} 道错题'})}\n\n"
 
                     # 生成详细分析
-                    yield f"data: {json.dumps({'status': 'analyzing', 'message': '📊 生成学情分析...'})}\n\n"
+                    yield f"data: {json.dumps({'status': 'analyzing', 'message': '生成学情分析...'})}\n\n"
 
                     mistakes_str = ", ".join([m["question_no"] for m in mistakes_list])
                     analysis_prompt = f"""你是经验丰富的老师. 检测到的错题: {mistakes_str}(共{len(mistakes_list)}道)
 
 请生成详细学情分析报告(参考以下格式):
 
-**一、学习现状分析**
+一、学习现状分析
 从卷面看,总结学生的学习优势(3点)
 
-**二、薄弱点与失分原因**
+二、薄弱点与失分原因
 针对错题分析失分原因和薄弱环节
 
-**三、针对性学习建议**
+三、针对性学习建议
 给出3-5条具体可操作的建议
 
 要求: 专业, 详细, 有针对性, 鼓励性语气."""
@@ -2281,20 +2277,20 @@ async def smart_analyze(request: DetectMistakesRequest):
         # 步骤2: 识别试卷学科类型
         print(f"[智能分析] 步骤2: 识别试卷学科类型...")
 
-        subject_prompt = """请分析这张试卷，识别它属于哪个学科。
+        subject_prompt = """请仔细观察这张试卷图片，识别它属于哪个学科。
 
-可能的学科包括：
-- 数学
-- 语文
-- 英语
-- 物理
-- 化学
-- 生物
-- 历史
-- 地理
-- 政治
+判断要点：
+- 英语：主要包含英文字母、英文单词、英语语法题、阅读理解等；有英文字母A-Z的大量使用；选择题可能是ABCD选项
+- 数学：主要包含数字、公式、计算题、几何图形、函数符号等；有数学运算符号和公式
+- 语文：主要包含汉字、古诗文、阅读理解、作文等
+- 物理：包含力学、电学、光学等物理公式和图示
+- 化学：包含化学方程式、元素符号、分子式等
+- 生物：包含生物图示、解剖图、细胞结构等
+- 历史：包含历史事件、年代、人物等
+- 地理：包含地图、地理图表等
+- 政治：包含政治理论、法律条文等
 
-请只返回学科名称，不要其他内容。如果无法确定，返回"未知"。"""
+请只返回学科名称（如：英语、数学、语文等），不要其他内容。如果无法确定，返回"未知"。"""
 
         subject_messages = [{
             "role": "user",
@@ -2308,9 +2304,12 @@ async def smart_analyze(request: DetectMistakesRequest):
             subject = call_glm_api(subject_messages, model="glm-4v", skip_delay=True, max_tokens=50)
             # 清理结果，提取学科名称
             subject = subject.strip()
-            if any(kw in subject for kw in ["英语", "English", "english"]):
+            print(f"[智能分析] 模型原始返回: '{subject}'")  # 添加调试日志
+
+            # 改进的匹配逻辑 - 按优先级匹配
+            if any(kw in subject for kw in ["英语", "English", "english", "English试卷"]):
                 subject = "英语试卷"
-            elif any(kw in subject for kw in ["数学", "Math", "math"]):
+            elif any(kw in subject for kw in ["数学", "Math", "math", "Mathematics"]):
                 subject = "数学试卷"
             elif any(kw in subject for kw in ["语文", "Chinese", "chinese"]):
                 subject = "语文试卷"
@@ -2318,11 +2317,19 @@ async def smart_analyze(request: DetectMistakesRequest):
                 subject = "物理试卷"
             elif any(kw in subject for kw in ["化学", "Chemistry", "chemistry"]):
                 subject = "化学试卷"
+            elif any(kw in subject for kw in ["生物", "Biology", "biology"]):
+                subject = "生物试卷"
+            elif any(kw in subject for kw in ["历史", "History", "history"]):
+                subject = "历史试卷"
+            elif any(kw in subject for kw in ["地理", "Geography", "geography"]):
+                subject = "地理试卷"
+            elif any(kw in subject for kw in ["政治", "Politics", "politics"]):
+                subject = "政治试卷"
             elif "未知" in subject or len(subject) > 10:
                 subject = "试卷"
             else:
                 subject = f"{subject}试卷"
-            print(f"[智能分析] 识别学科: {subject}")
+            print(f"[智能分析] 最终学科: {subject}")
         except:
             subject = "试卷"
             print(f"[智能分析] 学科识别失败，使用默认值")
@@ -2333,7 +2340,8 @@ async def smart_analyze(request: DetectMistakesRequest):
             "mistakes": mistakes
         }
 
-        content_type = analyze_content_type(detection_result)
+        # 使用用户指定的分析类型（如果有）
+        content_type = analyze_content_type(detection_result, force_type=request.analysis_type)
         print(f"[智能分析] 判断结果: {content_type}")
 
         # 步骤4: 根据类型生成相应的分析
@@ -2419,6 +2427,11 @@ async def smart_analyze(request: DetectMistakesRequest):
 async def smart_analyze_stream(request: DetectMistakesRequest):
     """
     智能分析API（流式输出）- 自动判断并执行相应分析
+
+    支持通过 analysis_type 参数强制指定分析类型:
+    - 'full': 强制整张试卷分析（学情分析）
+    - 'mistakes': 强制错题分析
+    - None: 自动判断
     """
     async def generate_stream():
         import sys
@@ -2426,38 +2439,306 @@ async def smart_analyze_stream(request: DetectMistakesRequest):
             start_time = time.time()
 
             # 发送开始信号
-            yield f"data: {json.dumps({'status': 'start', 'message': '🔍 开始智能分析...'})}\n\n"
+            yield f"data: {json.dumps({'status': 'start', 'message': '开始智能分析...'})}\n\n"
 
             # 解码图片
             image = decode_base64_image(request.image_data)
             user_marks_count = len(request.user_marks) if request.user_marks else 0
 
-            print(f"[智能分析流式] 用户标记: {user_marks_count}")
+            print(f"[智能分析流式] 用户标记: {user_marks_count}, analysis_type: {request.analysis_type}")
             sys.stdout.flush()
 
-            # 检测错题
-            yield f"data: {json.dumps({'status': 'detecting', 'message': '📋 正在检测试卷中的错题...'})}\n\n"
+            # 如果是整体分析模式，跳过错题检测，直接进行试卷内容分析
+            if request.analysis_type == 'full':
+                # 整体分析模式：跳过错题检测，直接分析试卷内容
+                yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在分析试卷内容...'})}\n\n"
 
-            # ... (检测逻辑与上面相同，这里省略详细代码)
+                # 识别试卷学科和内容
+                max_size = 1200
+                if image.width > max_size or image.height > max_size:
+                    ratio = min(max_size / image.width, max_size / image.height)
+                    new_width = int(image.width * ratio)
+                    new_height = int(image.height * ratio)
+                    image = image.resize((new_width, new_height))
 
-            # 示例：假设检测完成
-            yield f"data: {json.dumps({'status': 'detected', 'mistake_count': 3, 'message': f'✅ 检测到 3 道错题'})}\n\n"
+                base64_image = encode_image_to_base64(image, quality=75)
 
-            # 判断类型
-            yield f"data: {json.dumps({'status': 'analyzing', 'message': '📊 正在生成学情分析报告...'})}\n\n"
+                # 识别试卷内容
+                content_prompt = """请仔细观察这张试卷，提供以下信息：
 
-            # 生成分析...
-            yield f"data: {json.dumps({'content_type': 'learning_analysis'})}\n\n"
+1. 学科和年级
+2. 试卷的主要内容覆盖范围
+3. 题目类型（如选择题、填空题、解答题等）
+4. 整体难度评估
 
-            # 流式输出分析内容
-            analysis_text = "详细的分析内容..."
+请用简洁的语言描述。"""
 
-            for char in analysis_text:
-                yield f"data: {json.dumps({'content': char})}\n\n"
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                        {"type": "text", "text": content_prompt}
+                    ]
+                }]
 
-            # 完成
-            yield f"data: {json.dumps({'done': True})}\n\n"
+                paper_content = call_glm_api(messages, model="glm-4v", skip_delay=False, max_tokens=1000)
+                print(f"[智能分析流式] 试卷内容识别完成")
 
+                # 识别学科类型
+                subject_prompt = """请仔细观察这张试卷图片，识别它属于哪个学科。
+
+请只返回学科名称（如：英语、数学、语文等），不要其他内容。如果无法确定，返回"未知"。"""
+
+                subject_messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                        {"type": "text", "text": subject_prompt}
+                    ]
+                }]
+
+                try:
+                    subject = call_glm_api(subject_messages, model="glm-4v", skip_delay=True, max_tokens=50)
+                    subject = subject.strip()
+
+                    # 匹配学科
+                    if any(kw in subject for kw in ["英语", "English", "english"]):
+                        subject = "英语试卷"
+                    elif any(kw in subject for kw in ["数学", "Math", "math"]):
+                        subject = "数学试卷"
+                    elif any(kw in subject for kw in ["语文", "Chinese", "chinese"]):
+                        subject = "语文试卷"
+                    elif any(kw in subject for kw in ["物理", "Physics", "physics"]):
+                        subject = "物理试卷"
+                    elif any(kw in subject for kw in ["化学", "Chemistry", "chemistry"]):
+                        subject = "化学试卷"
+                    elif "未知" in subject or len(subject) > 10:
+                        subject = "试卷"
+                    else:
+                        subject = f"{subject}试卷"
+                except:
+                    subject = "试卷"
+
+                # 生成整体学情分析报告（不基于具体错题）
+                yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在生成学情分析报告...'})}\n\n"
+
+                mistakes = []  # 空错题列表
+
+                analysis_prompt = generate_learning_analysis_prompt(
+                    {"mistakes": mistakes},
+                    subject
+                )
+
+                analysis_messages = [{
+                    "role": "user",
+                    "content": analysis_prompt
+                }]
+
+                # 使用流式输出学情分析
+                analysis_response = call_glm_api(analysis_messages, model="glm-4-flash", skip_delay=False, max_tokens=3000)
+
+                for char in analysis_response:
+                    yield f"data: {json.dumps({'content': char})}\n\n"
+
+                # 完成
+                yield f"data: {json.dumps({'done': True, 'data': {'mistakes': [], 'need_confirmation': False}})}\n\n"
+
+            else:
+                # 检测错题
+                yield f"data: {json.dumps({'status': 'detecting', 'message': '正在检测试卷中的错题...'})}\n\n"
+
+                # 如果用户有标记，使用标记模式；否则自动检测
+                mistakes = []
+
+                if user_marks_count > 0:
+                    # 用户标记模式
+                    max_size = 1500
+                    if image.width > max_size or image.height > max_size:
+                        ratio = min(max_size / image.width, max_size / image.height)
+                        new_width = int(image.width * ratio)
+                        new_height = int(image.height * ratio)
+                        image = image.resize((new_width, new_height))
+
+                    base64_image = encode_image_to_base64(image, quality=85)
+
+                    analyze_prompt = f"""用户标记了试卷上的{user_marks_count}个区域需要分析。
+
+请识别这些区域中的题目，并提取：
+1. 题号
+2. 题目内容
+3. 学生答案
+4. 正确答案（如果可以判断）
+5. 错误原因
+
+必须返回JSON格式:
+{{
+  "mistakes": [
+    {{
+      "question_no": "题号",
+      "question": "题目内容",
+      "student_answer": "学生答案",
+      "correct_answer": "正确答案",
+      "reason": "错误原因"
+    }}
+  ]
+}}"""
+
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                            {"type": "text", "text": analyze_prompt}
+                        ]
+                    }]
+
+                    response_text = call_glm_api(messages, model="glm-4v", skip_delay=False, max_tokens=2000)
+
+                    # 解析响应
+                    json_match = re.search(r'\{[\s\S]*"mistakes"[\s\S]*\}', response_text)
+                    if json_match:
+                        try:
+                            data = json.loads(json_match.group(0))
+                            mistakes = data.get("mistakes", [])
+                        except:
+                            pass
+                else:
+                    # 自动检测模式
+                    detect_prompt = """请识别这张试卷中的所有错题（有红×标记或老师批改的题目）。
+
+请返回JSON格式:
+{
+  "mistakes": [
+    {"question_no": "题号", "reason": "红叉标记"}
+  ]
+}
+
+如果没有错题，返回: {"mistakes": []}"""
+
+                    max_size = 1200
+                    if image.width > max_size or image.height > max_size:
+                        ratio = min(max_size / image.width, max_size / image.height)
+                        image = image.resize((int(image.width * ratio), int(image.height * ratio)))
+
+                    base64_image = encode_image_to_base64(image, quality=75)
+
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                            {"type": "text", "text": detect_prompt}
+                        ]
+                    }]
+
+                    response_text = call_glm_api(messages, model="glm-4v", skip_delay=False, max_tokens=1500)
+
+                    # 解析响应
+                    json_match = re.search(r'\{[\s\S]*"mistakes"[\s\S]*\}', response_text)
+                    if json_match:
+                        try:
+                            data = json.loads(json_match.group(0))
+                            mistakes = data.get("mistakes", [])
+                        except:
+                            pass
+
+                mistake_count = len(mistakes)
+                yield f"data: {json.dumps({'status': 'detected', 'mistake_count': mistake_count, 'message': f'检测到 {mistake_count} 道错题'})}\n\n"
+
+                # 识别试卷学科类型
+                yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在分析试卷类型...'})}\n\n"
+
+                subject_prompt = """请仔细观察这张试卷图片，识别它属于哪个学科。
+
+请只返回学科名称（如：英语、数学、语文等），不要其他内容。如果无法确定，返回"未知"。"""
+
+                subject_messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                        {"type": "text", "text": subject_prompt}
+                    ]
+                }]
+
+                try:
+                    subject = call_glm_api(subject_messages, model="glm-4v", skip_delay=True, max_tokens=50)
+                    subject = subject.strip()
+
+                    # 匹配学科
+                    if any(kw in subject for kw in ["英语", "English", "english"]):
+                        subject = "英语试卷"
+                    elif any(kw in subject for kw in ["数学", "Math", "math"]):
+                        subject = "数学试卷"
+                    elif any(kw in subject for kw in ["语文", "Chinese", "chinese"]):
+                        subject = "语文试卷"
+                    elif any(kw in subject for kw in ["物理", "Physics", "physics"]):
+                        subject = "物理试卷"
+                    elif any(kw in subject for kw in ["化学", "Chemistry", "chemistry"]):
+                        subject = "化学试卷"
+                    elif "未知" in subject or len(subject) > 10:
+                        subject = "试卷"
+                    else:
+                        subject = f"{subject}试卷"
+                except:
+                    subject = "试卷"
+
+                # 判断内容类型
+                detection_result = {
+                    "user_marks_count": user_marks_count,
+                    "mistakes": mistakes
+                }
+
+                content_type = analyze_content_type(detection_result, force_type=request.analysis_type)
+                print(f"[智能分析流式] 判断结果: {content_type}")
+
+                # 根据类型生成相应的分析
+                if content_type["is_full_paper"]:
+                    # 整张试卷 - 生成学情分析
+                    yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在生成学情分析报告...'})}\n\n"
+
+                    analysis_prompt = generate_learning_analysis_prompt(
+                        {"mistakes": mistakes},
+                        subject
+                    )
+
+                    analysis_messages = [{
+                        "role": "user",
+                        "content": analysis_prompt
+                    }]
+
+                    # 使用流式输出
+                    analysis_response = call_glm_api(analysis_messages, model="glm-4-flash", skip_delay=False, max_tokens=3000)
+
+                    for char in analysis_response:
+                        yield f"data: {json.dumps({'content': char})}\n\n"
+
+                    # 完成
+                    yield f"data: {json.dumps({'done': True, 'data': {'mistakes': mistakes, 'need_confirmation': True}})}\n\n"
+
+                else:
+                    # 单个错题 - 生成针对性讲解
+                    yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在生成错题讲解...'})}\n\n"
+
+                    if mistakes:
+                        first_mistake = mistakes[0]
+
+                        guide_prompt = generate_mistake_guide_prompt(first_mistake)
+
+                        guide_messages = [{
+                            "role": "user",
+                            "content": guide_prompt
+                        }]
+
+                        guide_response = call_glm_api(guide_messages, model="glm-4-flash", skip_delay=False, max_tokens=2000)
+
+                        for char in guide_response:
+                            yield f"data: {json.dumps({'content': char})}\n\n"
+
+                        # 完成
+                        yield f"data: {json.dumps({'done': True, 'data': {'mistake': first_mistake, 'total_mistakes': mistakes}})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'error': '未检测到错题', 'done': True})}\n\n"
+
+        except HTTPException as e:
+            yield f"data: {json.dumps({'error': str(e.detail), 'done': True})}\n\n"
         except Exception as e:
             import traceback
             print(f"[智能分析流式] 错误: {str(e)}")
@@ -2465,6 +2746,111 @@ async def smart_analyze_stream(request: DetectMistakesRequest):
             yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"
 
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/detect/questions")
+async def detect_questions(request: OCRRequest):
+    """
+    检测试卷中的所有题目，返回题目列表供用户选择
+
+    用于"针对题目解题"模式，识别试卷中的所有题目
+    """
+    try:
+        import time
+        start_time = time.time()
+
+        # 解码图片
+        image = decode_base64_image(request.image_data)
+
+        # 使用较高分辨率以便AI能看清题目
+        max_size = 1500
+        if image.width > max_size or image.height > max_size:
+            ratio = min(max_size / image.width, max_size / image.height)
+            new_width = int(image.width * ratio)
+            new_height = int(image.height * ratio)
+            image = image.resize((new_width, new_height))
+
+        base64_image = encode_image_to_base64(image, quality=85)
+        print(f"[题目检测] 图片尺寸: {image.width}x{image.height}")
+
+        # 构建识别题目列表的 prompt
+        detect_prompt = """请识别这张试卷中的所有题目。
+
+请按题目顺序列出所有题目，对于每道题提供：
+1. 题号
+2. 题目文本（前50个字左右）
+
+请以JSON格式返回:
+```json
+{
+  "questions": [
+    {
+      "question_no": "题号（如：1、2、3）",
+      "question_text": "题目的前50个字左右"
+    }
+  ]
+}
+```
+
+注意：
+- 只列出题目本身，不需要答案或解析
+- 如果题号不明显，使用序号（1、2、3...）
+- 题目文本尽量完整，但不要过长"""
+
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": detect_prompt
+                }
+            ]
+        }]
+
+        response_text = call_glm_api(messages, model="glm-4v", skip_delay=False, max_tokens=2000)
+
+        # 解析响应
+        questions = []
+        json_match = re.search(r'```json\s*(\{[\s\S]*?\})\s*```', response_text)
+        if json_match:
+            try:
+                data = json.loads(json_match.group(1))
+                questions = data.get("questions", [])
+            except:
+                pass
+
+        if not questions:
+            json_match = re.search(r'\{[\s\S]*"questions"[\s\S]*\}', response_text)
+            if json_match:
+                try:
+                    data = json.loads(json_match.group(0))
+                    questions = data.get("questions", [])
+                except:
+                    pass
+
+        elapsed = time.time() - start_time
+        print(f"[题目检测] 完成，检测到 {len(questions)} 道题目，耗时: {elapsed:.2f}秒")
+
+        return {
+            "success": True,
+            "questions": questions,
+            "count": len(questions),
+            "elapsed_time": f"{elapsed:.2f}s"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[题目检测] 错误: {str(e)}")
+        print(f"错误堆栈:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"题目检测失败: {str(e)}")
 
 
 # ==================== 启动服务器 ====================
