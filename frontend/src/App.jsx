@@ -1567,7 +1567,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
             <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-lg font-semibold" style={{ color: '#374151' }}>Solvely AI</h1>
+            <h1 className="text-lg font-semibold" style={{ color: '#374151' }}>伴学AI</h1>
           </div>
         </div>
       </header>
@@ -1578,7 +1578,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         <aside className="hidden md:block md:fixed md:left-0 md:top-16 md:h-[calc(100vh-4rem)] md:w-64 md:z-40 md:overflow-y-auto" style={{ backgroundColor: '#f8f9fa' }}>
           <nav className="p-4 space-y-1">
             {[
-              { id: 'solve', label: 'AI Solver', icon: BookOpen },
+              { id: 'solve', label: 'AI解题', icon: BookOpen },
               { id: 'mistakes', label: '错题本', icon: AlertCircle },
               { id: 'analysis', label: '学习分析', icon: BarChart3 },
               { id: 'quiz', label: '练习生成', icon: Target }
@@ -2647,7 +2647,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-sm text-gray-500">
-            <p>AI伴学助手 · Solvely UI 风格</p>
+            <p>AI伴学助手</p>
           </div>
         </div>
       </footer>
