@@ -309,6 +309,7 @@ export default function AIStudyCompanion() {
   const [detectedMistakes, setDetectedMistakes] = useState([]); // 检测到的错题列表
   const [selectedGuideQuestion, setSelectedGuideQuestion] = useState(null); // 学生选择的引导问题（等待回答）
   const [isWaitingForStudentAnswer, setIsWaitingForStudentAnswer] = useState(false); // 等待学生回答
+  const [guidanceRound, setGuidanceRound] = useState(0); // 当前引导轮数（最多4轮）
 
   // 显示Toast通知
   const showToast = (message, type = 'info') => {
@@ -1714,6 +1715,8 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
         setShowGuideQuestions(true);
         // 保存当前错题数据，确保后续引导都基于这道题
         setCurrentMistakeData(mistake);
+        // 初始化引导轮数
+        setGuidanceRound(0);
       }
     } catch (error) {
       console.error('生成引导问题失败:', error);
@@ -1764,7 +1767,8 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
           question_id: selectedGuideQuestion.id,
           hint: selectedGuideQuestion.hint,
           student_response: studentAnswer,
-          mistake_data: currentMistakeData
+          mistake_data: currentMistakeData,
+          round: guidanceRound
         })
       });
 
@@ -1792,14 +1796,37 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
           }]);
         }
 
-        // 显示下一轮问题
-        if (guideData.next_questions && guideData.next_questions.length > 0) {
-          // 添加过渡提示
-          const questionNo = currentMistakeData?.question_no || '?';
+        // 增加引导轮数
+        const newRound = guidanceRound + 1;
+        setGuidanceRound(newRound);
+
+        const questionNo = currentMistakeData?.question_no || '?';
+
+        // 检查是否达到4轮
+        if (newRound >= 4) {
+          // 引导达到4轮，给出总结
           setConversation(prev => [...prev, {
             role: 'assistant',
             content: `---
-**继续讲解题目 ${questionNo}**
+**✅ 题目 ${questionNo} 讲解完成**
+
+经过${newRound}轮引导，相信你已经对这道题有了很好的理解。
+
+**核心要点总结：**
+- 正确答案：${currentMistakeData?.correct_answer || '未知'}
+- 解题关键：${guideData.hint || '回顾上述引导过程中的要点'}
+
+如果还有疑问，可以随时提问！`
+          }]);
+          // 清除当前错题数据和引导状态
+          setCurrentMistakeData(null);
+          setGuidanceRound(0);
+        } else if (guideData.next_questions && guideData.next_questions.length > 0) {
+          // 添加过渡提示
+          setConversation(prev => [...prev, {
+            role: 'assistant',
+            content: `---
+**继续讲解题目 ${questionNo}**（第${newRound + 1}/4轮）
 
 接下来，请从下面的问题中选择一个继续学习：`
           }]);
@@ -1811,7 +1838,6 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
           setShowGuideQuestions(true);
         } else {
           // 引导完成
-          const questionNo = currentMistakeData?.question_no || '?';
           setConversation(prev => [...prev, {
             role: 'assistant',
             content: `---
@@ -1821,6 +1847,7 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
           }]);
           // 清除当前错题数据
           setCurrentMistakeData(null);
+          setGuidanceRound(0);
         }
 
         // 清除选择的问题

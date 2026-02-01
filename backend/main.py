@@ -119,6 +119,7 @@ class GuideRequest(BaseModel):
     question_id: Optional[int] = None  # 选择的问题ID (用于交互式引导)
     hint: Optional[str] = None  # 选择的问题对应的提示 (用于交互式引导)
     mistake_data: Optional[dict] = None  # 错题数据 (用于交互式引导)
+    round: Optional[int] = 0  # 当前引导轮数 (用于控制引导长度)
 
 class DetectMistakesRequest(BaseModel):
     """错题检测请求"""
@@ -2883,6 +2884,7 @@ async def continue_guidance(request: GuideRequest):
         hint = request.hint
         student_answer = request.student_response
         mistake_data = request.mistake_data or {}
+        current_round = request.round or 0
 
         # 构建继续引导的prompt
         if student_answer:
@@ -2892,6 +2894,8 @@ async def continue_guidance(request: GuideRequest):
 提示内容：{hint}
 
 学生的回答：{student_answer}
+
+【当前引导轮数】第{current_round + 1}轮（建议总共4轮内完成引导）
 
 【题目信息始终记住】
 - 题号：{mistake_data.get('question_no', '?')}
@@ -2906,6 +2910,10 @@ async def continue_guidance(request: GuideRequest):
 1. 对学生回答的反馈（如果回答正确给予肯定，如果部分正确给予鼓励，如果偏离方向给予引导）
 2. 针对性的提示（根据学生的回答情况和题目特点，给出适当的提示，不要直接给答案）
 3. 下一轮的2个引导问题（需要基于上面的题目信息设计）
+
+**重要**：
+- 如果当前是第4轮，不要返回next_questions，让引导自然结束
+- 设计问题时要有层次性，从理解题目到回顾知识，再到解题思路，最后到总结提升
 
 严格按照以下JSON格式返回：
 {{
