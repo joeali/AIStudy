@@ -1668,9 +1668,11 @@ ${streamedContent}
     setIsThinking(true);
 
     // 将选择的错题信息添加到对话窗口
-    const mistakeContent = `**题目**：${mistake.question || '题目内容未识别'}
+    const mistakeContent = `📝 **正在讲解题目**
 
 **题号**：${mistake.question_no || '?'}
+
+**题目**：${mistake.question || '题目内容未识别'}
 
 **我的答案**：${mistake.student_answer || '未作答'}
 
@@ -1683,6 +1685,12 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
     setConversation(prev => [...prev, {
       role: 'user',
       content: mistakeContent
+    }]);
+
+    // 添加AI引导开始的提示
+    setConversation(prev => [...prev, {
+      role: 'assistant',
+      content: `好的，我们一起来分析这道题。我会通过提问引导你理解这道错题。请从下面的问题中选择一个来开始：`
     }]);
 
     try {
@@ -1704,6 +1712,7 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
         // 显示引导问题
         setGuideQuestions(data.data);
         setShowGuideQuestions(true);
+        // 保存当前错题数据，确保后续引导都基于这道题
         setCurrentMistakeData(mistake);
       }
     } catch (error) {
@@ -1785,11 +1794,33 @@ ${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
 
         // 显示下一轮问题
         if (guideData.next_questions && guideData.next_questions.length > 0) {
+          // 添加过渡提示
+          const questionNo = currentMistakeData?.question_no || '?';
+          setConversation(prev => [...prev, {
+            role: 'assistant',
+            content: `---
+**继续讲解题目 ${questionNo}**
+
+接下来，请从下面的问题中选择一个继续学习：`
+          }]);
+
           setGuideQuestions({
             introduction: '',
             questions: guideData.next_questions
           });
           setShowGuideQuestions(true);
+        } else {
+          // 引导完成
+          const questionNo = currentMistakeData?.question_no || '?';
+          setConversation(prev => [...prev, {
+            role: 'assistant',
+            content: `---
+**✅ 题目 ${questionNo} 讲解完成**
+
+你已经很好地理解了这道题！如果还有其他问题，可以随时提问。`
+          }]);
+          // 清除当前错题数据
+          setCurrentMistakeData(null);
         }
 
         // 清除选择的问题

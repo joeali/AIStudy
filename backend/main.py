@@ -2893,16 +2893,19 @@ async def continue_guidance(request: GuideRequest):
 
 学生的回答：{student_answer}
 
-错题信息：
+【题目信息始终记住】
 - 题号：{mistake_data.get('question_no', '?')}
-- 错误原因：{mistake_data.get('reason', '答题错误')}
 - 题目内容：{mistake_data.get('question', '未知')}
+- 学生答案：{mistake_data.get('student_answer', '未作答')}
+- 正确答案：{mistake_data.get('correct_answer', '未知')}
+- 错误原因：{mistake_data.get('reason', '答题错误')}
+{f"- 详细分析：{mistake_data.get('analysis', '')}" if mistake_data.get('analysis') else ""}
 
 请分析学生的回答，给出以下内容：
 
 1. 对学生回答的反馈（如果回答正确给予肯定，如果部分正确给予鼓励，如果偏离方向给予引导）
-2. 针对性的提示（根据学生的回答情况，给出适当的提示，不要直接给答案）
-3. 下一轮的2个引导问题
+2. 针对性的提示（根据学生的回答情况和题目特点，给出适当的提示，不要直接给答案）
+3. 下一轮的2个引导问题（需要基于上面的题目信息设计）
 
 严格按照以下JSON格式返回：
 {{
@@ -2929,9 +2932,13 @@ async def continue_guidance(request: GuideRequest):
 
 提示内容：{hint}
 
-错题信息：
+【题目信息始终记住】
 - 题号：{mistake_data.get('question_no', '?')}
+- 题目内容：{mistake_data.get('question', '未知')}
+- 学生答案：{mistake_data.get('student_answer', '未作答')}
+- 正确答案：{mistake_data.get('correct_answer', '未知')}
 - 错误原因：{mistake_data.get('reason', '答题错误')}
+{f"- 详细分析：{mistake_data.get('analysis', '')}" if mistake_data.get('analysis') else ""}
 
 请根据学生的选择，给出以下内容：
 
