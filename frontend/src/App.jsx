@@ -301,6 +301,14 @@ export default function AIStudyCompanion() {
   const [showQuestionMarking, setShowQuestionMarking] = useState(false);
   const [questionMarks, setQuestionMarks] = useState([]); // 用户标记的题目区域
   const [selectedQuestionMark, setSelectedQuestionMark] = useState(null); // 当前选中的题目区域
+  // 交互式引导状态
+  const [showGuideQuestions, setShowGuideQuestions] = useState(false);
+  const [guideQuestions, setGuideQuestions] = useState(null); // 引导问题数据
+  const [currentMistakeData, setCurrentMistakeData] = useState(null); // 当前错题数据
+  const [showMistakeSelector, setShowMistakeSelector] = useState(false); // 显示错题选择器
+  const [detectedMistakes, setDetectedMistakes] = useState([]); // 检测到的错题列表
+  const [selectedGuideQuestion, setSelectedGuideQuestion] = useState(null); // 学生选择的引导问题（等待回答）
+  const [isWaitingForStudentAnswer, setIsWaitingForStudentAnswer] = useState(false); // 等待学生回答
 
   // 显示Toast通知
   const showToast = (message, type = 'info') => {
@@ -512,7 +520,6 @@ export default function AIStudyCompanion() {
   const [guidanceConversation, setGuidanceConversation] = useState([]);
 
   // 找错题功能状态
-  const [detectedMistakes, setDetectedMistakes] = useState([]);
   const [currentGuidingMistake, setCurrentGuidingMistake] = useState(null);  // 当前正在引导的错题
 
   // 从真实数据生成学习报告
@@ -633,6 +640,14 @@ export default function AIStudyCompanion() {
   const handleSolveQuestion = async () => {
     // 防止空请求
     if (!question.trim() && !uploadedImage) return;
+
+    // 如果正在等待学生对引导问题的回答
+    if (isWaitingForStudentAnswer) {
+      const studentAnswer = question.trim();
+      setQuestion('');
+      await handleStudentAnswer(studentAnswer);
+      return;
+    }
 
     // 检查是否是确认错题的回复
     if (detectedMistakes.length > 0 && !isGuidanceMode) {
@@ -1134,6 +1149,25 @@ export default function AIStudyCompanion() {
               // 完成并获取最终数据
               if (data.done && data.data) {
                 finalData = data.data;
+
+                // 如果是引导模式且有多道错题，显示错题选择器
+                if (finalData.guide_mode && finalData.total_mistakes && finalData.total_mistakes.length > 1) {
+                  setDetectedMistakes(finalData.total_mistakes);
+                  setShowMistakeSelector(true);
+                } else if (finalData.guide_mode && finalData.total_mistakes && finalData.total_mistakes.length === 1) {
+                  // 只有一道错题，直接使用当前错题数据
+                  setCurrentMistakeData(finalData);
+                }
+              }
+
+              // 处理交互式引导问题
+              if (data.type === 'guide_questions') {
+                setGuideQuestions(data.data);
+                // 如果有错题选择器，不显示引导问题，等待用户选择错题
+                if (!showMistakeSelector) {
+                  setShowGuideQuestions(true);
+                  setCurrentMistakeData(finalData);
+                }
               }
 
             } catch (e) {
@@ -1241,6 +1275,25 @@ export default function AIStudyCompanion() {
               // 完成并获取最终数据
               if (data.done && data.data) {
                 finalData = data.data;
+
+                // 如果是引导模式且有多道错题，显示错题选择器
+                if (finalData.guide_mode && finalData.total_mistakes && finalData.total_mistakes.length > 1) {
+                  setDetectedMistakes(finalData.total_mistakes);
+                  setShowMistakeSelector(true);
+                } else if (finalData.guide_mode && finalData.total_mistakes && finalData.total_mistakes.length === 1) {
+                  // 只有一道错题，直接使用当前错题数据
+                  setCurrentMistakeData(finalData);
+                }
+              }
+
+              // 处理交互式引导问题
+              if (data.type === 'guide_questions') {
+                setGuideQuestions(data.data);
+                // 如果有错题选择器，不显示引导问题，等待用户选择错题
+                if (!showMistakeSelector) {
+                  setShowGuideQuestions(true);
+                  setCurrentMistakeData(finalData);
+                }
               }
 
             } catch (e) {
@@ -1604,6 +1657,150 @@ ${streamedContent}
           ? { ...msg, content: '抱歉，引导过程出现问题。', isGuidance: true }
           : msg
       ));
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  // 处理用户选择错题
+  const handleSelectMistake = async (mistake) => {
+    setShowMistakeSelector(false);
+    setIsThinking(true);
+
+    // 将选择的错题信息添加到对话窗口
+    const mistakeContent = `**题目**：${mistake.question || '题目内容未识别'}
+
+**题号**：${mistake.question_no || '?'}
+
+**我的答案**：${mistake.student_answer || '未作答'}
+
+**正确答案**：${mistake.correct_answer || '未知'}
+
+**错误原因**：${mistake.reason || '答题错误'}
+
+${mistake.analysis ? `**详细分析**：${mistake.analysis}` : ''}`;
+
+    setConversation(prev => [...prev, {
+      role: 'user',
+      content: mistakeContent
+    }]);
+
+    try {
+      // 为选中的错题生成引导问题
+      const guide_prompt = generate_mistake_guide_prompt(mistake);
+
+      const response = await fetch(`${API_BASE_URL}/api/generate/guide_questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: guide_prompt,
+          mistake: mistake
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        // 显示引导问题
+        setGuideQuestions(data.data);
+        setShowGuideQuestions(true);
+        setCurrentMistakeData(mistake);
+      }
+    } catch (error) {
+      console.error('生成引导问题失败:', error);
+      showToast('生成引导问题失败，请重试', 'error');
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  // 处理用户选择的引导问题
+  const handleSelectGuideQuestion = async (questionId, questionText, hint) => {
+    // 隐藏引导问题选项
+    setShowGuideQuestions(false);
+
+    // 将选择的问题添加到对话窗口
+    const selectedQuestion = guideQuestions.questions.find(q => q.id === questionId);
+
+    setConversation(prev => [...prev, {
+      role: 'user',
+      content: `我选择：${questionText}`
+    }]);
+
+    // 保存选择的问题信息，等待学生回答
+    setSelectedGuideQuestion({
+      id: questionId,
+      text: questionText,
+      hint: hint
+    });
+    setIsWaitingForStudentAnswer(true);
+  };
+
+  // 处理学生对引导问题的回答
+  const handleStudentAnswer = async (studentAnswer) => {
+    if (!selectedGuideQuestion || !currentMistakeData) {
+      showToast('请先选择一个问题', 'error');
+      return;
+    }
+
+    setIsWaitingForStudentAnswer(false);
+    setIsThinking(true);
+
+    try {
+      // 调用API分析学生的回答
+      const response = await fetch(`${API_BASE_URL}/api/guide/continue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_id: selectedGuideQuestion.id,
+          hint: selectedGuideQuestion.hint,
+          student_response: studentAnswer,
+          mistake_data: currentMistakeData
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const guideData = data.data;
+
+        // 显示AI的分析和反馈
+        if (guideData.feedback) {
+          setConversation(prev => [...prev, {
+            role: 'assistant',
+            content: guideData.feedback
+          }]);
+        }
+
+        if (guideData.hint) {
+          setConversation(prev => [...prev, {
+            role: 'assistant',
+            content: guideData.hint
+          }]);
+        }
+
+        // 显示下一轮问题
+        if (guideData.next_questions && guideData.next_questions.length > 0) {
+          setGuideQuestions({
+            introduction: '',
+            questions: guideData.next_questions
+          });
+          setShowGuideQuestions(true);
+        }
+
+        // 清除选择的问题
+        setSelectedGuideQuestion(null);
+      }
+    } catch (error) {
+      console.error('分析回答失败:', error);
+      setConversation(prev => [...prev, {
+        role: 'assistant',
+        content: '抱歉，分析你的回答时出现了错误，请重试。'
+      }]);
     } finally {
       setIsThinking(false);
     }
@@ -2473,6 +2670,83 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                 ))}
                 {/* 滚动锚点 */}
                 <div ref={conversationEndRef} />
+
+                {/* 错题选择器 */}
+                {showMistakeSelector && detectedMistakes.length > 0 && (
+                  <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm text-orange-700 mb-3 font-medium">
+                      检测到{detectedMistakes.length}道错题，请选择要讲解的题目：
+                    </p>
+                    <div className="space-y-2">
+                      {detectedMistakes.map((mistake, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSelectMistake(mistake)}
+                          disabled={isThinking}
+                          className="w-full text-left px-4 py-3 bg-white hover:bg-orange-100 border border-orange-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-gray-800 text-sm font-medium">
+                                {mistake.question_no || `第${index + 1}题`}
+                              </p>
+                              {mistake.question && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                  {mistake.question.substring(0, 50)}...
+                                </p>
+                              )}
+                              <p className="text-xs text-red-500 mt-1">
+                                {mistake.reason || '答题错误'}
+                              </p>
+                            </div>
+                            <ArrowUp className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 交互式引导问题选项 */}
+                {showGuideQuestions && guideQuestions && guideQuestions.questions && (
+                  <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    {guideQuestions.introduction && (
+                      <p className="text-sm text-blue-700 mb-3">{guideQuestions.introduction}</p>
+                    )}
+                    <div className="space-y-2">
+                      {guideQuestions.questions.map((q) => (
+                        <button
+                          key={q.id}
+                          onClick={() => handleSelectGuideQuestion(q.id, q.text, q.hint)}
+                          disabled={isThinking}
+                          className="w-full text-left px-4 py-3 bg-white hover:bg-blue-100 border border-blue-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                              {q.id}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-gray-800 text-sm">{q.text}</p>
+                            </div>
+                            <ArrowUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 等待学生回答的提示 */}
+                {isWaitingForStudentAnswer && selectedGuideQuestion && (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-700">
+                      💡 请在输入框中输入你对问题的思考和回答
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 输入区域 - 固定在底部 */}

@@ -112,10 +112,13 @@ class DiagnoseRequest(BaseModel):
 
 class GuideRequest(BaseModel):
     """引导请求"""
-    question: str  # 题目内容
-    diagnosis: str  # 诊断结果
+    question: Optional[str] = None  # 题目内容 (可选，用于传统引导模式)
+    diagnosis: Optional[str] = None  # 诊断结果 (可选，用于传统引导模式)
     student_response: Optional[str] = None  # 学生的回答(第一轮为空)
     conversation_history: Optional[List[dict]] = []  # 对话历史
+    question_id: Optional[int] = None  # 选择的问题ID (用于交互式引导)
+    hint: Optional[str] = None  # 选择的问题对应的提示 (用于交互式引导)
+    mistake_data: Optional[dict] = None  # 错题数据 (用于交互式引导)
 
 class DetectMistakesRequest(BaseModel):
     """错题检测请求"""
@@ -2714,8 +2717,8 @@ async def smart_analyze_stream(request: DetectMistakesRequest):
                     yield f"data: {json.dumps({'done': True, 'data': {'mistakes': mistakes, 'need_confirmation': True}})}\n\n"
 
                 else:
-                    # 单个错题 - 生成针对性讲解
-                    yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在生成错题讲解...'})}\n\n"
+                    # 单个错题 - 生成交互式引导问题
+                    yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在准备引导问题...'})}\n\n"
 
                     if mistakes:
                         first_mistake = mistakes[0]
@@ -2727,13 +2730,28 @@ async def smart_analyze_stream(request: DetectMistakesRequest):
                             "content": guide_prompt
                         }]
 
-                        guide_response = call_glm_api(guide_messages, model="glm-4-flash", skip_delay=False, max_tokens=2000)
+                        guide_response = call_glm_api(guide_messages, model="glm-4-flash", skip_delay=False, max_tokens=1500)
 
-                        for char in guide_response:
-                            yield f"data: {json.dumps({'content': char})}\n\n"
+                        # 解析JSON格式的问题选项
+                        questions_data = None
 
-                        # 完成
-                        yield f"data: {json.dumps({'done': True, 'data': {'mistake': first_mistake, 'total_mistakes': mistakes}})}\n\n"
+                        # 尝试提取JSON
+                        json_match = re.search(r'\{[\s\S]*"questions"[\s\S]*\}', guide_response)
+                        if json_match:
+                            try:
+                                questions_data = json.loads(json_match.group(0))
+                            except:
+                                pass
+
+                        if questions_data and "questions" in questions_data:
+                            # 返回引导问题和选项
+                            yield f"data: {json.dumps({'type': 'guide_questions', 'data': questions_data})}\n\n"
+                            yield f"data: {json.dumps({'done': True, 'data': {'mistake': first_mistake, 'total_mistakes': mistakes, 'guide_mode': True}})}\n\n"
+                        else:
+                            # 如果解析失败，返回原始文本
+                            for char in guide_response:
+                                yield f"data: {json.dumps({'content': char})}\n\n"
+                            yield f"data: {json.dumps({'done': True, 'data': {'mistake': first_mistake, 'total_mistakes': mistakes}})}\n\n"
                     else:
                         yield f"data: {json.dumps({'error': '未检测到错题', 'done': True})}\n\n"
 
@@ -2851,6 +2869,169 @@ async def detect_questions(request: OCRRequest):
         print(f"[题目检测] 错误: {str(e)}")
         print(f"错误堆栈:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"题目检测失败: {str(e)}")
+
+
+@app.post("/api/guide/continue")
+async def continue_guidance(request: GuideRequest):
+    """
+    处理学生的选择，继续引导
+
+    当学生选择了引导问题后，根据选择给出提示并继续引导
+    """
+    try:
+        question_id = request.question_id
+        hint = request.hint
+        student_answer = request.student_response
+        mistake_data = request.mistake_data or {}
+
+        # 构建继续引导的prompt
+        if student_answer:
+            # 学生已回答，分析回答并继续引导
+            continue_prompt = f"""学生选择了问题 {question_id}。
+
+提示内容：{hint}
+
+学生的回答：{student_answer}
+
+错题信息：
+- 题号：{mistake_data.get('question_no', '?')}
+- 错误原因：{mistake_data.get('reason', '答题错误')}
+- 题目内容：{mistake_data.get('question', '未知')}
+
+请分析学生的回答，给出以下内容：
+
+1. 对学生回答的反馈（如果回答正确给予肯定，如果部分正确给予鼓励，如果偏离方向给予引导）
+2. 针对性的提示（根据学生的回答情况，给出适当的提示，不要直接给答案）
+3. 下一轮的2个引导问题
+
+严格按照以下JSON格式返回：
+{{
+  "feedback": "对学生回答的反馈和评价",
+  "hint": "根据学生回答情况给出的提示",
+  "next_questions": [
+    {{
+      "id": {question_id + 2},
+      "text": "下一个引导问题1",
+      "hint": "提示内容1"
+    }},
+    {{
+      "id": {question_id + 2},
+      "text": "下一个引导问题2",
+      "hint": "提示内容2"
+    }}
+  ]
+}}
+
+只返回JSON，不要其他内容。"""
+        else:
+            # 学生还没回答，只是选择了问题
+            continue_prompt = f"""学生选择了问题 {question_id}。
+
+提示内容：{hint}
+
+错题信息：
+- 题号：{mistake_data.get('question_no', '?')}
+- 错误原因：{mistake_data.get('reason', '答题错误')}
+
+请根据学生的选择，给出以下内容：
+
+1. 简短的肯定或鼓励
+2. 针对性的提示（不要直接给答案）
+3. 下一轮的2个引导问题
+
+严格按照以下JSON格式返回：
+{{
+  "feedback": "简短的肯定和鼓励",
+  "hint": "根据选择的提示内容",
+  "next_questions": [
+    {{
+      "id": {question_id + 2},
+      "text": "下一个引导问题1",
+      "hint": "提示内容1"
+    }},
+    {{
+      "id": {question_id + 2},
+      "text": "下一个引导问题2",
+      "hint": "提示内容2"
+    }}
+  ]
+}}
+
+只返回JSON，不要其他内容。"""
+
+        messages = [{
+            "role": "user",
+            "content": continue_prompt
+        }]
+
+        response_text = call_glm_api(messages, model="glm-4-flash", skip_delay=False, max_tokens=1500)
+
+        # 解析JSON响应
+        import json
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            try:
+                guide_data = json.loads(json_match.group(0))
+                return {
+                    "success": True,
+                    "data": guide_data
+                }
+            except:
+                    pass
+
+        # 如果解析失败，返回文本
+        return {
+            "success": True,
+            "text_response": response_text[:1000]
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"[继续引导] 错误: {str(e)}")
+        print(f"错误堆栈:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"继续引导失败: {str(e)}")
+
+
+@app.post("/api/generate/guide_questions")
+async def generate_guide_questions(request: dict):
+    """
+    为指定的错题生成引导问题
+    """
+    try:
+        mistake = request.get('mistake', {})
+        prompt = request.get('prompt', '')
+
+        if not prompt:
+            # 如果没有提供prompt，使用默认的
+            from smart_analysis import generate_mistake_guide_prompt
+            prompt = generate_mistake_guide_prompt(mistake)
+
+        messages = [{
+            "role": "user",
+            "content": prompt
+        }]
+
+        response_text = call_glm_api(messages, model="glm-4-flash", skip_delay=False, max_tokens=1500)
+
+        # 解析JSON格式的响应
+        import re
+        json_match = re.search(r'\{[\s\S]*"questions"[\s\S]*\}', response_text)
+
+        if json_match:
+            try:
+                questions_data = json.loads(json_match.group(0))
+                return {"success": True, "data": questions_data}
+            except:
+                pass
+
+        # 如果解析失败，返回错误
+        return {"success": False, "error": "无法解析AI响应"}
+
+    except Exception as e:
+        import traceback
+        print(f"[生成引导问题] 错误: {str(e)}")
+        print(f"错误堆栈:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"生成引导问题失败: {str(e)}")
 
 
 # ==================== 启动服务器 ====================
