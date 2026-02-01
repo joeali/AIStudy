@@ -377,18 +377,20 @@ export default function AIStudyCompanion() {
 
     if (conversation.length === 0 || !hasRealContent) return;
 
-    // 过滤掉图片数据，只保存文本内容
-    const conversationWithoutImages = conversation.map(msg => ({
+    // 保存对话内容，包含图片数据
+    const conversationWithImages = conversation.map(msg => ({
       role: msg.role,
       content: msg.content,
-      // 不存储image字段，避免localStorage配额超限
-      // image: msg.image
+      image: msg.image // 保存图片数据
     }));
 
-    // 检查是否重复
-    const conversationStr = JSON.stringify(conversationWithoutImages);
+    // 检查是否重复（只比较内容，不比较图片）
+    const conversationStr = JSON.stringify(conversationWithImages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    })));
     const isDuplicate = conversationHistory.some(item =>
-      JSON.stringify(item.conversation) === conversationStr
+      JSON.stringify(item.conversation.map(m => ({ role: m.role, content: m.content }))) === conversationStr
     );
 
     if (isDuplicate) {
@@ -400,24 +402,45 @@ export default function AIStudyCompanion() {
       id: Date.now(),
       timestamp: new Date().toISOString(),
       preview: conversation[0]?.content?.substring(0, 50) + '...' || '新对话',
-      conversation: conversationWithoutImages,
+      conversation: conversationWithImages,
       question: question,
       hasImage: uploadedImage !== null
     };
 
     const newHistory = [historyItem, ...conversationHistory].slice(0, 10); // 减少到10条
-    setConversationHistory(newHistory);
 
+    // 尝试保存包含图片的历史记录
     try {
       localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+      setConversationHistory(newHistory);
     } catch (error) {
-      console.warn('无法保存对话历史到localStorage:', error);
-      // 清空旧历史并重试
+      console.warn('无法保存包含图片的对话历史（配额超限），尝试保存不带图片的版本:', error);
+      // 如果保存失败，移除图片数据后重试
+      const conversationWithoutImages = conversationWithImages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      const historyItemWithoutImages = {
+        ...historyItem,
+        conversation: conversationWithoutImages
+      };
+      const newHistoryWithoutImages = [historyItemWithoutImages, ...conversationHistory].slice(0, 10);
       try {
-        localStorage.removeItem('conversationHistory');
-        localStorage.setItem('conversationHistory', JSON.stringify(newHistory.slice(0, 5)));
+        localStorage.setItem('conversationHistory', JSON.stringify(newHistoryWithoutImages));
+        setConversationHistory(newHistoryWithoutImages);
+        showToast('历史记录已保存（图片未保存以节省空间）', 'info');
       } catch (e) {
         console.error('localStorage完全无法使用:', e);
+        // 清空旧历史并重试
+        try {
+          localStorage.removeItem('conversationHistory');
+          localStorage.setItem('conversationHistory', JSON.stringify(newHistoryWithoutImages.slice(0, 5)));
+          setConversationHistory(newHistoryWithoutImages.slice(0, 5));
+          showToast('历史记录已保存（旧记录已清理）', 'info');
+        } catch (e2) {
+          console.error('localStorage完全无法使用:', e2);
+          showToast('无法保存历史记录', 'error');
+        }
       }
     }
   };
@@ -2157,15 +2180,19 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                       if (conversation.length > 0 && hasRealContent) {
                         if (currentSessionType === 'full_analysis') {
                           // 整体分析 - 保存到对话历史
-                          const conversationWithoutImages = conversation.map(msg => ({
+                          const conversationWithImages = conversation.map(msg => ({
                             role: msg.role,
-                            content: msg.content
+                            content: msg.content,
+                            image: msg.image // 保存图片数据
                           }));
 
-                          // 检查是否重复
-                          const conversationStr = JSON.stringify(conversationWithoutImages);
+                          // 检查是否重复（只比较内容，不比较图片）
+                          const conversationStr = JSON.stringify(conversationWithImages.map(msg => ({
+                            role: msg.role,
+                            content: msg.content
+                          })));
                           const isDuplicate = conversationHistory.some(item =>
-                            JSON.stringify(item.conversation) === conversationStr
+                            JSON.stringify(item.conversation.map(m => ({ role: m.role, content: m.content }))) === conversationStr
                           );
 
                           if (!isDuplicate) {
@@ -2173,7 +2200,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                               id: Date.now(),
                               timestamp: new Date().toISOString(),
                               preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
-                              conversation: conversationWithoutImages,
+                              conversation: conversationWithImages,
                               question: '整体分析',
                               hasImage: uploadedImage !== null,
                               sessionType: 'full_analysis'
@@ -2184,7 +2211,23 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                               localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
                               setConversationHistory(newHistory);
                             } catch (error) {
-                              console.warn('无法保存对话历史到localStorage:', error);
+                              console.warn('无法保存包含图片的对话历史，尝试保存不带图片的版本:', error);
+                              // 如果保存失败，移除图片数据后重试
+                              const conversationWithoutImages = conversationWithImages.map(msg => ({
+                                role: msg.role,
+                                content: msg.content
+                              }));
+                              const historyItemWithoutImages = {
+                                ...historyItem,
+                                conversation: conversationWithoutImages
+                              };
+                              const newHistoryWithoutImages = [historyItemWithoutImages, ...conversationHistory].slice(0, 10);
+                              try {
+                                localStorage.setItem('conversationHistory', JSON.stringify(newHistoryWithoutImages));
+                                setConversationHistory(newHistoryWithoutImages);
+                              } catch (e2) {
+                                console.error('localStorage完全无法使用:', e2);
+                              }
                             }
                           }
                         } else if (currentSessionType === 'mistake_analysis') {
@@ -2291,15 +2334,19 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                   if (conversation.length > 0 && hasRealContent) {
                     if (currentSessionType === 'full_analysis') {
                       // 整体分析 - 保存到对话历史
-                      const conversationWithoutImages = conversation.map(msg => ({
+                      const conversationWithImages = conversation.map(msg => ({
                         role: msg.role,
-                        content: msg.content
+                        content: msg.content,
+                        image: msg.image // 保存图片数据
                       }));
 
-                      // 检查是否重复
-                      const conversationStr = JSON.stringify(conversationWithoutImages);
+                      // 检查是否重复（只比较内容，不比较图片）
+                      const conversationStr = JSON.stringify(conversationWithImages.map(msg => ({
+                        role: msg.role,
+                        content: msg.content
+                      })));
                       const isDuplicate = conversationHistory.some(item =>
-                        JSON.stringify(item.conversation) === conversationStr
+                        JSON.stringify(item.conversation.map(m => ({ role: m.role, content: m.content }))) === conversationStr
                       );
 
                       if (!isDuplicate) {
@@ -2307,7 +2354,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                           id: Date.now(),
                           timestamp: new Date().toISOString(),
                           preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
-                          conversation: conversationWithoutImages,
+                          conversation: conversationWithImages,
                           question: '整体分析',
                           hasImage: uploadedImage !== null,
                           sessionType: 'full_analysis'
@@ -2318,7 +2365,23 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
                           localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
                           setConversationHistory(newHistory);
                         } catch (error) {
-                          console.warn('无法保存对话历史到localStorage:', error);
+                          console.warn('无法保存包含图片的对话历史，尝试保存不带图片的版本:', error);
+                          // 如果保存失败，移除图片数据后重试
+                          const conversationWithoutImages = conversationWithImages.map(msg => ({
+                            role: msg.role,
+                            content: msg.content
+                          }));
+                          const historyItemWithoutImages = {
+                            ...historyItem,
+                            conversation: conversationWithoutImages
+                          };
+                          const newHistoryWithoutImages = [historyItemWithoutImages, ...conversationHistory].slice(0, 10);
+                          try {
+                            localStorage.setItem('conversationHistory', JSON.stringify(newHistoryWithoutImages));
+                            setConversationHistory(newHistoryWithoutImages);
+                          } catch (e2) {
+                            console.error('localStorage完全无法使用:', e2);
+                          }
                         }
                       }
                     } else if (currentSessionType === 'mistake_analysis') {
