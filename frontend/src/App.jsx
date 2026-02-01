@@ -2271,6 +2271,77 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         {activeTab === 'solve' && (
           <div className="space-y-6">
 
+            {/* 移动端顶部按钮栏 */}
+            <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 sticky top-16 z-30">
+              <button
+                onClick={() => {
+                  setHistoryTab('conversation');
+                  setShowHistory(true);
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-all relative"
+              >
+                <Clock className="w-5 h-5 text-gray-500" />
+                <span className="text-sm font-medium">历史记录</span>
+                {(conversationHistory.length > 0 || analysisHistory.length > 0) && (
+                  <span className="w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center">
+                    {conversationHistory.length + analysisHistory.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  // 保存当前对话到历史记录
+                  if (conversation.length > 0) {
+                    if (currentSessionType === 'full_analysis') {
+                      // 整体分析 - 保存到对话历史
+                      const conversationWithoutImages = conversation.map(msg => ({
+                        role: msg.role,
+                        content: msg.content
+                      }));
+
+                      const historyItem = {
+                        id: Date.now(),
+                        timestamp: new Date().toISOString(),
+                        preview: conversation[0]?.content?.substring(0, 50) + '...' || '整体分析',
+                        conversation: conversationWithoutImages,
+                        question: '整体分析',
+                        hasImage: uploadedImage !== null,
+                        sessionType: 'full_analysis'
+                      };
+
+                      const newHistory = [historyItem, ...conversationHistory].slice(0, 10);
+                      try {
+                        localStorage.setItem('conversationHistory', JSON.stringify(newHistory));
+                        setConversationHistory(newHistory);
+                      } catch (error) {
+                        console.warn('无法保存对话历史到localStorage:', error);
+                      }
+                    } else if (currentSessionType === 'mistake_analysis') {
+                      // 错题分析 - 不需要在这里保存，因为已经在performAnalysis中保存了
+                    } else {
+                      // 普通对话 - 保存到对话历史
+                      saveToHistory();
+                    }
+                  }
+
+                  // 清空所有状态
+                  setConversation([]);
+                  setQuestion('');
+                  setUploadedImage(null);
+                  setIsGuidanceMode(false);
+                  setCurrentDiagnosis(null);
+                  setGuidanceConversation([]);
+                  setDetectedMistakes([]);
+                  setCurrentSessionType('conversation');
+                }}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm font-medium">New</span>
+              </button>
+            </div>
+
             {/* 主要内容区域 - 使用 flex 布局固定输入框 */}
             <div className="flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
               {/* 对话区域 - 可滚动 */}
