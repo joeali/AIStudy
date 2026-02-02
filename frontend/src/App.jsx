@@ -2407,9 +2407,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
           <nav className="p-4 space-y-1">
             {[
               { id: 'solve', label: 'AI解题', icon: BookOpen },
-              { id: 'mistakes', label: '错题本', icon: AlertCircle },
-              { id: 'analysis', label: '学习分析', icon: BarChart3 },
-              { id: 'quiz', label: '练习生成', icon: Target }
+              { id: 'analysis', label: '学习分析', icon: BarChart3 }
             ].map(tab => (
               <div key={tab.id} className="flex items-center gap-2">
                 <button
@@ -3485,9 +3483,7 @@ ${learningData.subjectAnalysis.map(s => `${s.name}: ${s.accuracy}% (${s.change >
         <div className="flex justify-around items-center h-16 px-2">
           {[
             { id: 'solve', label: '解题', icon: BookOpen },
-            { id: 'mistakes', label: '错题本', icon: AlertCircle },
-            { id: 'analysis', label: '分析', icon: BarChart3 },
-            { id: 'quiz', label: '练习', icon: Target }
+            { id: 'analysis', label: '分析', icon: BarChart3 }
           ].map(tab => (
             <button
               key={tab.id}
